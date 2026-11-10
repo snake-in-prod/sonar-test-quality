@@ -1,0 +1,20 @@
+<p><code>expect.assertions(n)</code> with a count that differs from the expect assertions the test makes.</p>
+<h2>Why is this an issue?</h2>
+<p>The count exists to catch assertions that never run, typically in a <code>.then</code> or <code>catch</code>. When it
+is wrong, the test fails for the count rather than for the behaviour, or a later fix of the count hides the assertion
+that was really skipped. The rule only reports when the count is certain: no loops, branches, assertion helpers or
+callbacks that may run several times.</p>
+<h2>Noncompliant code example</h2>
+<pre>
+it('rejects unknown users', async () =&gt; {
+  expect.assertions(2);
+  await expect(fetchUser(-1)).rejects.toThrow('not found');
+});
+</pre>
+<h2>Compliant solution</h2>
+<pre>
+it('rejects unknown users', async () =&gt; {
+  expect.assertions(1);
+  await expect(fetchUser(-1)).rejects.toThrow('not found');
+});
+</pre>

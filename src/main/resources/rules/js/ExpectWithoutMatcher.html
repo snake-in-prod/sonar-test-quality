@@ -1,0 +1,17 @@
+<p>An <code>expect(...)</code> that is never finished with a matcher, or whose matcher is not called, checks nothing:
+Jest and Vitest only fail when a matcher runs.</p>
+<h2>Why is this an issue?</h2>
+<p>The test looks like it verifies the value, but it passes whatever the value is. A forgotten matcher, a trailing
+<code>.resolves</code> or <code>.not</code>, or a matcher without parentheses (<code>.toBeTruthy</code>) are all silent.</p>
+<h2>Noncompliant code example</h2>
+<pre>
+expect(user.name);
+expect(save(user)).resolves;
+expect(isValid(user)).toBeTruthy;
+</pre>
+<h2>Compliant solution</h2>
+<pre>
+expect(user.name).toBe('Ada');
+await expect(save(user)).resolves.toBeUndefined();
+expect(isValid(user)).toBeTruthy();
+</pre>
