@@ -10,19 +10,45 @@ public final class Chains {
   private Chains() {
   }
 
-  /** Keywords that never start a chain ({@code if (x)} is not a call of "if"). */
-  public static final Set<String> KEYWORDS = Set.of("if", "elif", "else", "while", "for", "switch", "catch", "return", "await",
-    "yield", "typeof", "new", "function", "def", "class", "with", "assert", "not", "and", "or", "in", "is", "lambda", "try",
-    "except", "finally", "raise", "throw", "del", "import", "from", "as", "case", "do", "void", "delete", "instanceof",
-    "async", "const", "let", "var", "final", "late", "export", "default", "extends", "implements", "super", "global",
-    "nonlocal", "pass", "break", "continue", "static");
+  /** Words that never start a chain in any language ({@code if (x)} is not a call of "if"). */
+  private static final Set<String> COMMON = Set.of("if", "else", "while", "for", "switch", "catch", "return", "await", "yield",
+    "new", "class", "try", "finally", "throw", "import", "case", "do", "async", "const", "var", "final", "static", "break",
+    "continue", "super", "in", "is", "as", "default", "extends");
+
+  private static final Set<String> PYTHON = union(COMMON, Set.of("elif", "def", "with", "assert", "not", "and", "or", "lambda",
+    "except", "raise", "del", "from", "global", "nonlocal", "pass"));
+  private static final Set<String> JS = union(COMMON, Set.of("typeof", "function", "void", "delete", "instanceof", "let",
+    "export", "implements", "of", "from"));
+  private static final Set<String> DART = union(COMMON, Set.of("late", "void", "implements", "with", "required", "assert",
+    "rethrow", "external", "factory", "covariant"));
+
+  /** Keywords that never start a chain for a language key ("py", "js", "ts", "dart"). */
+  public static Set<String> keywords(String language) {
+    return switch (language) {
+      case "py" -> PYTHON;
+      case "js", "ts" -> JS;
+      case "dart" -> DART;
+      default -> COMMON;
+    };
+  }
+
+  private static Set<String> union(Set<String> a, Set<String> b) {
+    java.util.Set<String> out = new java.util.HashSet<>(a);
+    out.addAll(b);
+    return Set.copyOf(out);
+  }
 
   private static final Set<String> ACCESSORS = Set.of(".", "?.", "..", "?..", "!.");
 
   /** Every chain in the tree, nested ones (inside arguments, lambdas, blocks) included, in source order of their start. */
   public static List<Chain> in(Node.Group root) {
+    return in(root, COMMON);
+  }
+
+  /** As {@link #in(Node.Group)}, with the keywords of one language. */
+  public static List<Chain> in(Node.Group root, Set<String> keywords) {
     List<Chain> out = new ArrayList<>();
-    collect(root, out);
+    collect(root, out, keywords);
     out.sort((a, b) -> a.first().line() != b.first().line() ? Integer.compare(a.first().line(), b.first().line())
       : Integer.compare(a.first().column(), b.first().column()));
     return out;
@@ -30,11 +56,15 @@ public final class Chains {
 
   /** The chains that start directly in this group's children (not nested). */
   public static List<Chain> direct(Node.Group group) {
+    return direct(group, COMMON);
+  }
+
+  public static List<Chain> direct(Node.Group group, Set<String> keywords) {
     List<Chain> out = new ArrayList<>();
     List<Node> kids = group.children();
     int i = 0;
     while (i < kids.size()) {
-      int end = chainEnd(group, i);
+      int end = chainEnd(group, i, keywords);
       if (end > i) {
         out.add(build(group, i, end));
         i = end;
@@ -45,20 +75,20 @@ public final class Chains {
     return out;
   }
 
-  private static void collect(Node.Group g, List<Chain> out) {
-    out.addAll(direct(g));
+  private static void collect(Node.Group g, List<Chain> out, Set<String> keywords) {
+    out.addAll(direct(g, keywords));
     for (Node c : g.children()) {
       if (c instanceof Node.Group sub) {
-        collect(sub, out);
+        collect(sub, out, keywords);
       }
     }
   }
 
   /** End index (exclusive) of a chain starting at {@code i}, or {@code i} when none starts there. */
-  private static int chainEnd(Node.Group g, int i) {
+  private static int chainEnd(Node.Group g, int i, Set<String> keywords) {
     List<Node> kids = g.children();
     Token t = Nodes.leaf(kids.get(i));
-    if (t == null || t.kind() != TokenKind.IDENT || KEYWORDS.contains(t.text())) {
+    if (t == null || t.kind() != TokenKind.IDENT || keywords.contains(t.text())) {
       return i;
     }
     if (i > 0 && kids.get(i - 1) instanceof Node.Leaf prev && ACCESSORS.contains(prev.token().text())) {

@@ -85,7 +85,7 @@ public class DartSupport implements LanguageSupport {
       return false;
     }
     Token prev = i > 0 ? Nodes.leaf(kids.get(i - 1)) : null;
-    if (prev != null && (ACCESSORS.contains(prev.text()) || prev.kind() == TokenKind.IDENT && !Chains.KEYWORDS.contains(prev.text()))) {
+    if (prev != null && (ACCESSORS.contains(prev.text()) || prev.kind() == TokenKind.IDENT && !Chains.keywords("dart").contains(prev.text()))) {
       return false;
     }
     Node next = i + 2 < kids.size() ? kids.get(i + 2) : null;

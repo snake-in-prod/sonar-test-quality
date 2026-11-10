@@ -66,7 +66,7 @@ public final class ParsedFile {
     @SuppressWarnings("unchecked")
     List<Chain> cached = (List<Chain>) extras.get(Chain.class);
     if (cached == null) {
-      cached = Chains.in(root);
+      cached = Chains.in(root, Chains.keywords(language));
       extras.put(Chain.class, cached);
     }
     return cached;
