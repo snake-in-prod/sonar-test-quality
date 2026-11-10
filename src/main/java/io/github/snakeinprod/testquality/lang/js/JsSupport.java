@@ -1,5 +1,8 @@
 package io.github.snakeinprod.testquality.lang.js;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import io.github.snakeinprod.testquality.lang.LanguageSupport;
 import io.github.snakeinprod.testquality.model.Outline;
 import io.github.snakeinprod.testquality.model.TestCase;
@@ -61,9 +64,10 @@ public class JsSupport implements LanguageSupport {
 
   /**
    * {@code import ... from 'x'}, {@code import 'x'}, {@code export ... from 'x'}, {@code require('x')} and
-   * {@code import('x')} of paths starting with "." or "/" (the base directory); aliases such as tsconfig paths are not
-   * resolved. A path resolves as written, with a JS or TS extension, as a directory index, or from ".js" to the ".ts"
-   * source.
+   * {@code import('x')} of paths starting with "." or "/" (the base directory), and of workspace packages: a name that
+   * a package.json in the project declares, to that package's entry, or {@code name/sub/path} to {@code sub/path} or
+   * {@code src/sub/path} in its directory. Aliases such as tsconfig paths are not resolved. A path resolves as written,
+   * with a JS or TS extension, as a directory index, or from ".js" to the ".ts" source.
    */
   @Override
   public Outline outline(ParsedFile file, Set<String> paths, Function<String, String> read) {
@@ -73,7 +77,8 @@ public class JsSupport implements LanguageSupport {
       Token p = t.get(i - 1);
       if (t.get(i).kind() == TokenKind.STRING && (p.isIdent("from") || p.isIdent("import")
         || p.is("(") && i > 1 && (t.get(i - 2).isIdent("require") || t.get(i - 2).isIdent("import")))) {
-        String r = resolve(file.path(), unquote(t.get(i).text()), paths);
+        String spec = unquote(t.get(i).text());
+        String r = spec.startsWith(".") || spec.startsWith("/") ? resolve(file.path(), spec, paths) : resolvePackage(spec, paths, read);
         if (r != null && !r.equals(file.path())) {
           imports.add(r);
         }
@@ -106,6 +111,91 @@ public class JsSupport implements LanguageSupport {
     }
     return candidates.stream().filter(paths::contains).findFirst().orElse(null);
   }
+
+  /** {@code @scope/name[/sub]} or {@code name[/sub]} of a project package: its entry, or the sub path in it. */
+  private String resolvePackage(String spec, Set<String> paths, Function<String, String> read) {
+    int n = spec.startsWith("@") ? 2 : 1;
+    String[] parts = spec.split("/", n + 1);
+    String dir = parts.length < n ? null : packages(paths, read).get(n == 2 ? parts[0] + "/" + parts[1] : parts[0]);
+    if (dir == null) {
+      return null;
+    }
+    List<String> candidates = new ArrayList<>();
+    if (parts.length > n) {
+      candidates.add(parts[n]);
+      candidates.add("src/" + parts[n]);
+    } else {
+      candidates.addAll(entries(read.apply(dir + "package.json")));
+      candidates.addAll(List.of("src/index", "index"));
+    }
+    for (String c : candidates) {
+      String r = resolve(dir, c.startsWith("./") ? c : "./" + c, paths);
+      if (r != null && !r.matches(".*\\.d\\.[cm]?ts")) {
+        return r;
+      }
+    }
+    return null;
+  }
+
+  /** The entries a package.json names, in order: "exports" (a string or the "." entry), "module", "main", "source". */
+  private static List<String> entries(String json) {
+    List<String> out = new ArrayList<>();
+    try {
+      JsonObject o = JsonParser.parseString(json).getAsJsonObject();
+      JsonElement exports = o.get("exports");
+      if (exports != null && exports.isJsonObject() && exports.getAsJsonObject().has(".")) {
+        exports = exports.getAsJsonObject().get(".");
+      }
+      condition(exports, out);
+      for (String k : List.of("module", "main", "source")) {
+        if (o.get(k) != null && o.get(k).isJsonPrimitive()) {
+          out.add(o.get(k).getAsString());
+        }
+      }
+    } catch (RuntimeException e) {
+      // unreadable or not a JSON object: only the index fallback applies
+    }
+    return out;
+  }
+
+  /** A string export, or the import, default and types conditions of an object, nested ones too. */
+  private static void condition(JsonElement e, List<String> out) {
+    if (e != null && e.isJsonPrimitive()) {
+      out.add(e.getAsString());
+    } else if (e != null && e.isJsonObject()) {
+      for (String k : List.of("import", "default", "types")) {
+        condition(e.getAsJsonObject().get(k), out);
+      }
+    }
+  }
+
+  /** Package name to its directory ("" or "a/b/"): every directory above a project file with a named package.json. */
+  private Map<String, String> packages(Set<String> paths, Function<String, String> read) {
+    if (packages == null) {
+      packages = new HashMap<>();
+      Set<String> dirs = new TreeSet<>(Set.of(""));
+      for (String p : paths) {
+        for (int i = p.indexOf('/'); i >= 0; i = p.indexOf('/', i + 1)) {
+          dirs.add(p.substring(0, i + 1));
+        }
+      }
+      // sorted: a package above another of the same name wins
+      for (String dir : dirs) {
+        String json = dir.contains("node_modules/") ? null : read.apply(dir + "package.json");
+        try {
+          JsonElement name = json == null ? null : JsonParser.parseString(json).getAsJsonObject().get("name");
+          if (name != null && name.isJsonPrimitive()) {
+            packages.putIfAbsent(name.getAsString(), dir);
+          }
+        } catch (RuntimeException e) {
+          // unreadable or not a JSON object: not a package
+        }
+      }
+    }
+    return packages;
+  }
+
+  private Map<String, String> packages;
 
   private static final List<String> EXTENSIONS = List.of(".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts");
 

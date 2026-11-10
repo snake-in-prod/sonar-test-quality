@@ -86,6 +86,8 @@ public class TestQualitySensor implements Sensor {
       "js", WildcardPattern.create(context.config().getStringArray(TestQualityPlugin.JS_TEST_PATTERNS)),
       "ts", WildcardPattern.create(context.config().getStringArray(TestQualityPlugin.JS_TEST_PATTERNS)),
       "dart", WildcardPattern.create(context.config().getStringArray(TestQualityPlugin.DART_TEST_PATTERNS)));
+    boolean newCode = newCodeAnalysis(context.config().get("sonar.pullrequest.key").orElse(null),
+      context.config().get("sonar.branch.name").orElse(null));
     int analysed = 0;
     int failed = 0;
     List<InputFile> sources = new ArrayList<>();
@@ -97,7 +99,7 @@ public class TestQualitySensor implements Sensor {
       }
       try {
         Analyzer.Result r = analyzer.analyze(f.relativePath(), f.language(), f.contents());
-        save(context, f, r);
+        save(context, f, r, newCode);
         analysed++;
       } catch (IOException | RuntimeException e) {
         failed++;
@@ -115,7 +117,9 @@ public class TestQualitySensor implements Sensor {
           saveIssues(context, f, r.issues());
           measure(context, f, TqMetrics.SOURCE_FILES, 1);
           measure(context, f, TqMetrics.UNTESTED_SOURCE_FILES, r.reached() ? 0 : 1);
-          measure(context, f, TqMetrics.NEW_UNTESTED_SOURCE_FILES, !r.reached() && isNew(f) ? 1 : 0);
+          if (newCode) {
+            measure(context, f, TqMetrics.NEW_UNTESTED_SOURCE_FILES, !r.reached() && isNew(f) ? 1 : 0);
+          }
           counted++;
           untested += r.reached() ? 0 : 1;
         }
@@ -126,7 +130,20 @@ public class TestQualitySensor implements Sensor {
     LOG.info("Test Quality: {} source files, {} not reached by a test", counted, untested);
   }
 
-  /** ADDED or CHANGED against the previous analysis or the reference branch: the file is new code. */
+  /**
+   * Whether new_tq_* are saved: in a pull request or branch analysis, where file status is computed against the target
+   * branch. Not on the main branch, where it is against the previous analysis (every file is ADDED on the first one), so
+   * the gate's new code conditions get no value there, like SonarQube's own on a first analysis. Scanner plugins are not
+   * told the main branch name: a branch named main or master counts as the main branch.
+   */
+  static boolean newCodeAnalysis(String pullRequestKey, String branchName) {
+    if (pullRequestKey != null && !pullRequestKey.isBlank()) {
+      return true;
+    }
+    return branchName != null && !branchName.isBlank() && !branchName.equals("main") && !branchName.equals("master");
+  }
+
+  /** ADDED or CHANGED against the target branch: the file is new code. */
   private static boolean isNew(InputFile f) {
     return f.status() == InputFile.Status.ADDED || f.status() == InputFile.Status.CHANGED;
   }
@@ -141,13 +158,12 @@ public class TestQualitySensor implements Sensor {
     return false;
   }
 
-  private static void save(SensorContext context, InputFile f, Analyzer.Result r) {
+  private static void save(SensorContext context, InputFile f, Analyzer.Result r, boolean newCode) {
     int issues = saveIssues(context, f, r.issues());
     TestFile t = r.tests();
     if (t.tests().isEmpty() && issues == 0) {
       return;
     }
-    boolean isNew = isNew(f);
     measure(context, f, TqMetrics.TESTS, t.tests().size());
     measure(context, f, TqMetrics.ASSERTIONS, t.assertions());
     measure(context, f, TqMetrics.TESTS_WITHOUT_ASSERTION, (int) t.withoutAssertion());
@@ -155,9 +171,12 @@ public class TestQualitySensor implements Sensor {
     measure(context, f, TqMetrics.MOCK_HEAVY_TESTS, (int) t.mockHeavy());
     measure(context, f, TqMetrics.SKIPPED_TESTS, (int) t.skipped());
     measure(context, f, TqMetrics.CORRECTNESS_ISSUES, issues);
-    measure(context, f, TqMetrics.NEW_TESTS, isNew ? t.tests().size() : 0);
-    measure(context, f, TqMetrics.NEW_TESTS_WITHOUT_ASSERTION, isNew ? (int) t.withoutAssertion() : 0);
-    measure(context, f, TqMetrics.NEW_CORRECTNESS_ISSUES, isNew ? issues : 0);
+    if (newCode) {
+      boolean isNew = isNew(f);
+      measure(context, f, TqMetrics.NEW_TESTS, isNew ? t.tests().size() : 0);
+      measure(context, f, TqMetrics.NEW_TESTS_WITHOUT_ASSERTION, isNew ? (int) t.withoutAssertion() : 0);
+      measure(context, f, TqMetrics.NEW_CORRECTNESS_ISSUES, isNew ? issues : 0);
+    }
   }
 
   /** Saves the issues of active rules; returns how many. */

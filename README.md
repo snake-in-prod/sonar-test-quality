@@ -131,16 +131,20 @@ on the source files that were mutated (mutation metrics), and summed up to direc
 | `tq_source_files` | imports | source files with at least one function or class (see Test reach) |
 | `tq_untested_source_files` | imports | source files no test reaches |
 | `tq_test_reach` | imports | (source files - untested) / source files, in %, on directories and the project |
-| `new_tq_tests`, `new_tq_tests_without_assertion`, `new_tq_correctness_issues` | code, rules | the same on new code |
-| `new_tq_untested_source_files` | imports | untested source files on new code |
+| `new_tq_tests`, `new_tq_tests_without_assertion`, `new_tq_correctness_issues` | code, rules | the same on new code (pull requests and branches) |
+| `new_tq_untested_source_files` | imports | untested source files on new code (pull requests and branches) |
 
 ### New code
 
-SonarQube does not show plugins the new code period line by line, so new code is counted **per file**: a file is new
-code when SonarQube marks it added or changed (against the previous analysis, or against the reference branch in a
-branch or pull request analysis). A new or changed file counts whole: a test file that gets one new test brings all
-its tests, tests without assertion and correctness issues into the `new_tq_*` measures. Unchanged files count 0. The
-first analysis of a project marks every file as added.
+SonarQube does not show plugins the new code period, so the `new_tq_*` measures exist only in **pull request and
+branch analyses**, where SonarQube marks each file added or changed against the target branch. New code is counted
+**per file**: a new or changed file counts whole, so a test file that gets one new test brings all its tests, tests
+without assertion and correctness issues into the `new_tq_*` measures. Unchanged files count 0.
+
+On the main branch no `new_tq_*` measure is saved, so the gate's new code conditions on them are not evaluated there,
+as SonarQube does with its own on a first analysis. A pull request is an analysis with `sonar.pullrequest.key`, a
+branch one with `sonar.branch.name`; plugins are not told the main branch name, so a branch named `main` or `master`
+counts as the main branch.
 
 ### Test reach
 
@@ -154,7 +158,10 @@ injection) shows as untested.
   looked up from each directory above the test file and its `src/`, so src layouts and nested projects resolve.
 - JavaScript / TypeScript: `import ... from`, `export ... from`, `require()` and `import()` of paths starting with
   `.` or `/`, with or without extension (`.js`, `.jsx`, `.ts`, `.tsx`, `.mjs`, `.cjs`, `.mts`, `.cts`), `index`
-  files, and `./x.js` written for `x.ts`. Aliases (tsconfig paths, webpack aliases) are not resolved.
+  files, and `./x.js` written for `x.ts`. Workspace packages of a monorepo: an import of a name that a `package.json`
+  in the project declares (`@scope/pkg`) goes to that package's entry (`exports` as a string or its `"."` entry,
+  `module`, `main`, `source`, else `src/index.*` or `index.*`), and `@scope/pkg/sub/path` to `sub/path` or
+  `src/sub/path` in the package directory. Aliases (tsconfig paths, webpack aliases) are not resolved.
 - Dart: relative imports, `export` and `part`, and `package:<name>/x.dart` as `lib/x.dart` of the project package
   whose `pubspec.yaml` has that name.
 
@@ -209,7 +216,8 @@ Settings > Quality Gate*, or make it the default on the *Quality Gates* page.
 | Flaky tests (`tq_flaky_tests`) | greater than 0 |
 
 Projects without a mutation or test report have no `tq_mutation_score` or `tq_flaky_tests`, and a condition without
-a value does not fail.
+a value does not fail. The three new code conditions have a value only in pull request and branch analyses (see New
+code): on the main branch, the first analysis included, the gate checks the overall conditions only.
 
 ## Without SonarQube
 

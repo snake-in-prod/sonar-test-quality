@@ -39,8 +39,8 @@ public class TqMetrics implements Metrics {
   public static final Metric<Integer> FLAKY_TESTS = intMetric("tq_flaky_tests", "Flaky tests",
     "Tests that both passed and failed across the reports of one analysis");
 
-  // New code: a file is new code when SonarQube marks it ADDED or CHANGED (against the previous analysis, or the
-  // reference branch of a branch or pull request analysis); then it counts whole, else 0.
+  // New code, saved in branch and pull request analyses only: a file is new code when SonarQube marks it ADDED or
+  // CHANGED against the target branch; then it counts whole, else 0.
   public static final Metric<Integer> NEW_TESTS = newMetric("new_tq_tests", "Tests found on new code",
     "Tests in test files added or changed", Metric.DIRECTION_BETTER);
   public static final Metric<Integer> NEW_TESTS_WITHOUT_ASSERTION = newMetric("new_tq_tests_without_assertion",
