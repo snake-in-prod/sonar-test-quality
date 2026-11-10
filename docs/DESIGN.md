@@ -19,7 +19,11 @@ reports (mutation JSON, JUnit XML, Dart JSON) -> ReportSensor -> report measures
 (`RuleVerifier`) all go through it: `analyze` for every test file first, then `analyzeSource` for every source file.
 
 New code is per file: `new_tq_*` take the file's value when `InputFile.status()` is ADDED or CHANGED, else 0. The
-plugin API gives no new code lines, and the per file value is what a gate condition on new code can use.
+plugin API gives no new code lines, and the per file value is what a gate condition on new code can use. They are
+saved only in pull request (`sonar.pullrequest.key`) and branch (`sonar.branch.name`, not `main` or `master`)
+analyses, where the status is against the target branch; on the main branch it is against the previous analysis
+(everything on the first), so nothing is saved and the gate's new code conditions are not evaluated
+(`TestQualitySensor.newCodeAnalysis`). Scanner plugins get no main branch name, hence the name check.
 
 ## Test reach
 
@@ -29,6 +33,10 @@ file it adds the imports of those imported source files (one level), and that se
 test reaches through two imports or more count as untested: cheap, predictable, and a test of the file in between
 rarely exercises them much. Files without a function or class, generated, configuration, migration, declaration and
 entry point files are not source files (`Analyzer.NOT_SOURCE` and a header comment check).
+
+Package imports resolve to project files where the language has a manifest: Dart `package:` imports through
+`pubspec.yaml`, JS/TS workspace package names through `package.json` (read with the project read function, they are
+not source files): the entry, or a deep path under the package directory or its `src/`.
 
 ## Parsing
 

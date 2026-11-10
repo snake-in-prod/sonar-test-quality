@@ -1,0 +1,1 @@
+{ "name": "text-utils", "exports": "./lib/text.ts" }

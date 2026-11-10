@@ -24,6 +24,9 @@ class SourceRulesTest {
     assertThat(RuleVerifier.verify("js", "SourceWithoutTest")).containsOnly(
       entry("src/cart.ts", true), entry("src/prices.js", true), entry("src/esm.ts", true), entry("src/legacy.cjs", true),
       entry("src/ui/index.tsx", true), entry("src/ui/Button.tsx", true),
+      // workspace packages: the entry (src/index.ts re-exports circle), a deep import, an "exports" string
+      entry("packages/shapes/src/circle.ts", true), entry("packages/shapes/src/square.ts", true),
+      entry("packages/text/lib/text.ts", true), entry("packages/text/lib/unused.ts", false),
       entry("src/deep.ts", false), entry("src/alias.ts", false), entry("src/orphan.ts", false), entry("src/small.ts", false));
   }
 
