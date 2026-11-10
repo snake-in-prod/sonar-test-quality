@@ -16,7 +16,8 @@ reports (mutation JSON, JUnit XML, Dart JSON) -> ReportSensor -> report measures
 ```
 
 `sensor/Analyzer` runs this for one file. The SonarQube sensor, the command line scanner (`cli/Scan`) and the tests
-(`RuleVerifier`) all go through it: `analyze` for every test file first, then `analyzeSource` for every source file.
+(`RuleVerifier`) all go through it: `analyze` for every test file first, then `analyzeSource` for every source file. Project
+files that rules read (`RuleContext.project`) stay parsed in a cache of the 2000 most recently used.
 
 New code is per file: `new_tq_*` take the file's value when `InputFile.status()` is ADDED or CHANGED, else 0. The
 plugin API gives no new code lines, and the per file value is what a gate condition on new code can use.
@@ -68,6 +69,13 @@ language finds:
   closure's `{}` group. In files importing package:bloc_test, `blocTest<B, S>('description', build: ..., act: ...,
   expect: ..., verify: ...)` too: `body` is the call's `()` argument group, its `skip:` (a count of states) is not a
   skip, and `expect:` and `errors:` count one assertion each.
+- JS/TS and Dart: a function of the same file that calls a test function with its own parameters as name and body (the
+  body parameter passed as is, or called in the closure it passes) is a wrapper: `function itWithUser(name, fn) {
+  it(name, async () => fn(await login())); }`, `void slideshowTest(String name, body) { testWidgets(name, (t) async {
+  await body(t); }); }`. Each call of it with a string literal name and a function literal body is a test (start: the
+  wrapper's name, body: that function); its own call of the test function is not. Dart rules ask
+  `DartSupport.testFunctions` which framework function a test runs (`test` or `testWidgets`) and which closure parameter
+  is the tester. Wrappers from other files are not followed.
 
 `assertions` counts: Python `assert` statements, `self.assert*` / `self.fail`, `pytest.raises` / `pytest.warns` blocks,
 mock `assert_*` calls; JS `expect(...).<matcher>(...)` chains (a matcher call, `.not`, `.resolves` etc. included),
