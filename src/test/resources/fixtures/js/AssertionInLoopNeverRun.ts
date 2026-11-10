@@ -7,6 +7,10 @@ const CASES = [
 ];
 const BY_NAME = { ann: 1, bob: 2 };
 
+function connectionsOf<Keys extends (string | undefined)[]>(...keys: Keys) {
+  return keys.map((k) => registry.get(k));
+}
+
 describe('users', () => {
   it('for of over a computed list', async () => {
     const users = await listUsers();
@@ -84,6 +88,12 @@ describe('users', () => {
 
   it('variable set outside the test', () => {
     for (const u of shared) expect(u.id).toBeDefined();
+  });
+
+  it('one result per argument', () => {
+    const connections = connectionsOf('a', 'b');
+    connections.forEach((conn) => expect(conn.send).not.toBeCalled());
+    for (const conn of connectionsOf('c')) expect(conn).toBeDefined();
   });
 
   it('map inside an expect', async () => {

@@ -157,7 +157,7 @@ public class AssertionInLoopNeverRun implements TestRule {
       return items.size() == 1 && canBeEmpty(ctx, body, items.get(0));
     }
     if (!c.calls().isEmpty()) {
-      return !fixedCount(c);
+      return !fixedCount(c) && !perArgument(ctx, c);
     }
     List<Node> init = initializer(body, root);
     if (init == null || init.isEmpty()) {
@@ -170,7 +170,33 @@ public class AssertionInLoopNeverRun implements TestRule {
     List<Chain> chains = Chains.direct(new Node.Group(null, null, expr), Chains.keywords("js"));
     return !chains.isEmpty() && chains.get(0).from() == 0 && !chains.get(0).calls().isEmpty()
       && !FIXED.contains(chains.get(0).firstName()) && !literal(ctx.file().root(), chains.get(0).firstName())
-      && !throwsWhenEmpty(chains.get(0)) && !fixedCount(chains.get(0));
+      && !throwsWhenEmpty(chains.get(0)) && !fixedCount(chains.get(0)) && !perArgument(ctx, chains.get(0));
+  }
+
+  /**
+   * A call with arguments of a function the file defines with a rest parameter ({@code function pick(...keys)}): it
+   * returns one result per argument, so it is not empty.
+   */
+  private static boolean perArgument(RuleContext ctx, Chain c) {
+    if (c.names().size() != 1 || c.callAfter(0) == null || c.callAfter(0).items().isEmpty()) {
+      return false;
+    }
+    String name = c.firstName();
+    boolean[] out = {false};
+    Nodes.groups(ctx.file().root(), g -> {
+      List<Node> kids = g.children();
+      for (int i = 0; i + 1 < kids.size() && !out[0]; i++) {
+        boolean named = Nodes.isIdent(kids.get(i), "function") && Nodes.isIdent(kids.get(i + 1), name)
+          || Nodes.isIdent(kids.get(i), name) && Nodes.isLeaf(kids.get(i + 1), "=");
+        // the parameter group comes before the body; generic type parameters may hold groups too
+        for (int k = i + 2; named && k < kids.size() && k < i + 14 && !(kids.get(k) instanceof Node.Group b && b.is("{")); k++) {
+          if (kids.get(k) instanceof Node.Group p && p.is("(") && !p.children().isEmpty() && Nodes.isLeaf(p.children().get(0), "...")) {
+            out[0] = true;
+          }
+        }
+      }
+    });
+    return out[0];
   }
 
   /** getAllBy* / findAllBy* (Testing Library) throw when nothing matches. */

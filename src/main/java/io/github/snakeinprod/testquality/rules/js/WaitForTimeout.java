@@ -18,7 +18,9 @@ import java.util.Set;
  * page.waitForTimeout or a fixed setTimeout delay makes tests slow and flaky. Reports Playwright
  * {@code waitForTimeout}, Cypress {@code cy.wait(<number>)}, {@code await new Promise(r => setTimeout(r, <number>))},
  * {@code await setTimeout(<number>)} (timers/promises) and {@code await sleep(<number>)} of a sleep helper defined in the
- * file. setTimeout forms stay silent under fake timers and for delays below {@link #MIN_DELAY} ms (flush idioms).
+ * file. setTimeout forms stay silent under fake timers and for delays below {@link #MIN_DELAY} ms (flush idioms). A wait
+ * followed by a check that nothing changed (an assertion repeated from before the wait, or a synchronous count or
+ * {@code .not} assertion) stays silent: absence can only be checked after a fixed window.
  */
 public class WaitForTimeout implements TestRule {
 
@@ -42,17 +44,21 @@ public class WaitForTimeout implements TestRule {
       List<Chain> chains = Chains.in(body, keywords);
       boolean fake = fakeTimersOutside || chains.stream().anyMatch(c -> c.lastName().equals("useFakeTimers"));
       for (Chain c : chains) {
-        check(ctx, c, fake, sleepers);
+        check(ctx, c, fake, sleepers, chains);
       }
       if (!fake) {
-        Nodes.groups(body, g -> awaitedPromises(ctx, g, keywords));
+        Nodes.groups(body, g -> awaitedPromises(ctx, g, keywords, chains));
       }
     }
   }
 
-  private static void check(RuleContext ctx, Chain c, boolean fake, Set<String> sleepers) {
+  private static void check(RuleContext ctx, Chain c, boolean fake, Set<String> sleepers, List<Chain> testChains) {
     List<String> names = c.names();
     String last = names.get(names.size() - 1);
+    boolean candidate = last.equals("waitForTimeout") || last.equals("wait") || last.equals("setTimeout") || sleepers.contains(last);
+    if (!candidate || window(testChains, c.first(), c.last())) {
+      return;
+    }
     if (names.size() >= 2 && last.equals("waitForTimeout") && c.endsWithCall()) {
       Token name = nameToken(c, names.size() - 1);
       ctx.report(name, c.last(), "\"" + String.join(".", names) + "\" waits for a fixed time; wait for the element, response "
@@ -82,7 +88,7 @@ public class WaitForTimeout implements TestRule {
   }
 
   /** {@code await new Promise(r => setTimeout(r, <number>))}, a type argument after Promise allowed. */
-  private static void awaitedPromises(RuleContext ctx, Node.Group g, Set<String> keywords) {
+  private static void awaitedPromises(RuleContext ctx, Node.Group g, Set<String> keywords, List<Chain> testChains) {
     List<Node> kids = g.children();
     for (int i = 0; i + 3 < kids.size(); i++) {
       if (!Nodes.isIdent(kids.get(i), "await") || !Nodes.isIdent(kids.get(i + 1), "new") || !Nodes.isIdent(kids.get(i + 2), "Promise")) {
@@ -92,7 +98,8 @@ public class WaitForTimeout implements TestRule {
       while (j < kids.size() && j < i + 8 && kids.get(j) instanceof Node.Leaf) {
         j++;
       }
-      if (j >= kids.size() || !(kids.get(j) instanceof Node.Group args) || !args.is("(")) {
+      if (j >= kids.size() || !(kids.get(j) instanceof Node.Group args) || !args.is("(")
+        || window(testChains, Nodes.leaf(kids.get(i)), args.last())) {
         continue;
       }
       for (Chain c : Chains.in(args, keywords)) {
@@ -104,6 +111,41 @@ public class WaitForTimeout implements TestRule {
         }
       }
     }
+  }
+
+  private static final Set<String> COUNTS = Set.of("toHaveBeenCalledTimes", "toBeCalledTimes", "toHaveLength");
+  private static final Set<String> EQUALS = Set.of("toBe", "toEqual", "toStrictEqual");
+
+  /**
+   * The wait from {@code start} to {@code end} is a window for checking that nothing changes: the first assertion after
+   * it repeats one made before it, or is a synchronous {@code .not}, call count, length or number check.
+   */
+  private static boolean window(List<Chain> chains, Token start, Token end) {
+    Set<String> before = new HashSet<>();
+    for (Chain a : chains) {
+      if (!JsTrees.isAssertion(a)) {
+        continue;
+      }
+      String text = Nodes.text(a.container().children().subList(a.from(), a.to()));
+      if (compare(a.first(), start) < 0) {
+        before.add(text);
+      } else if (compare(a.first(), end) > 0) {
+        return before.contains(text) || !JsTrees.isAwaited(a) && steady(a);
+      }
+    }
+    return false;
+  }
+
+  private static boolean steady(Chain a) {
+    List<String> names = a.names();
+    String matcher = a.lastName();
+    Chain.Call call = a.callAfter(names.size() - 1);
+    return names.contains("not") || COUNTS.contains(matcher)
+      || EQUALS.contains(matcher) && call != null && call.items().size() == 1 && number(call.items().get(0)) >= 0;
+  }
+
+  private static int compare(Token a, Token b) {
+    return a.line() != b.line() ? Integer.compare(a.line(), b.line()) : Integer.compare(a.column(), b.column());
   }
 
   /** The first argument as a number when it is a single number literal, else -1. */

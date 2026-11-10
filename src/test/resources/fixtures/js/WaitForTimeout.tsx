@@ -56,6 +56,29 @@ test.describe('checkout', () => {
     await delayHelper(1000);
   });
 
+  test('waits, then expects a call', async () => {
+    await sleep(200); // Noncompliant
+    expect(onSave).toHaveBeenCalled();
+  });
+
+  test('checks that nothing changes during a window', async ({ page }) => {
+    const fallback = page.getByTestId('fallback');
+    await expect(fallback).toBeVisible();
+    await page.waitForTimeout(300);
+    await expect(fallback).toBeVisible();
+  });
+
+  test('checks that nothing more happens', async ({ page }) => {
+    await page.goto('./render-count');
+    await page.waitForTimeout(500);
+    const renders = logs.filter(l => l === 'render').length;
+    expect(renders).toBe(1);
+    await new Promise(r => setTimeout(r, 300));
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    await sleep(100);
+    expect(onError).not.toHaveBeenCalled();
+  });
+
   test('uses fake timers', async () => {
     jest.useFakeTimers();
     await new Promise(r => setTimeout(r, 1000));
