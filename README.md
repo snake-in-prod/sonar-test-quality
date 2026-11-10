@@ -23,11 +23,16 @@ Requires SonarQube Community Build 26.7 or later (tested on 26.10) and Java 21.
 
 1. Download `sonar-test-quality-<version>.jar` from the [releases](https://github.com/snake-in-prod/sonar-test-quality/releases).
 2. Copy it to `extensions/plugins/` of the SonarQube server and restart.
-3. Profiles. Dart gets "Sonar way" as its default profile with the active rules. For Python, JavaScript and TypeScript the
-   bundled analyzers own "Sonar way", and SonarQube lets only one plugin define a built-in profile of a given name, so
-   this plugin adds a built-in "Test Quality" profile with its active rules. To keep the analyzer's rules too, extend
-   "Sonar way" (*Quality Profiles > Sonar way > Extend*), then on the *Rules* page filter on the repository
-   (`testquality-python`, `testquality-js` or `testquality-ts`) and use *Bulk Change > Activate in* your profile.
+3. Profiles. The default built-in profile is "Sonar way" on SonarQube 26.7 and "Sonar way core" on 26.10, which also
+   has "Sonar way extended" and "Sonar way comprehensive".
+   - Dart: this plugin defines "Sonar way" with the active rules as the default profile. 26.7 shows it as is; 26.10
+     derives "Sonar way core" (default), "Sonar way extended" and "Sonar way comprehensive" from it. Nothing to do.
+   - Python, JavaScript, TypeScript: the bundled analyzers own the "Sonar way" profiles, and SonarQube lets only one
+     plugin define a built-in profile of a given name, so this plugin adds a built-in "Test Quality" profile with its
+     active rules. To keep the analyzer's rules too, extend the language's default built-in profile ("Sonar way" on
+     26.7, "Sonar way core" on 26.10: *Quality Profiles > ... > Extend*) and set the copy as default, then on the
+     *Rules* page filter on the repository (`testquality-python`, `testquality-js` or `testquality-ts`) and use
+     *Bulk Change > Activate in* your profile.
 4. Analyse as usual; test files are found through `sonar.tests` or by name (see Settings).
 
 ## Rules

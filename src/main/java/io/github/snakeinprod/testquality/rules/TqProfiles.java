@@ -6,7 +6,8 @@ import org.sonar.api.server.profile.BuiltInQualityProfilesDefinition;
  * Built-in profiles. SonarQube allows one plugin per built-in profile name and language, so the rules cannot join the
  * "Sonar way" profiles of py, js and ts that the bundled analyzers define: those languages get a built-in "Test Quality"
  * profile with the active rules (to activate them in your own profile, see the README). Dart, which only this plugin
- * defines, gets "Sonar way" as its default profile.
+ * defines, gets "Sonar way" as its default profile (SonarQube 26.10 derives "Sonar way core", "extended" and
+ * "comprehensive" from it).
  */
 public class TqProfiles implements BuiltInQualityProfilesDefinition {
 

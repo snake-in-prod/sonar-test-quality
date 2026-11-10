@@ -29,6 +29,8 @@ class TestQualityPageTest {
       assertThat(js).contains("createElementNS(").doesNotContain("innerHTML", "eval(");
       // the rules facet is sticky (it ignores the rules filter): keep only this plugin's rules, not java:/css: rules
       assertThat(js).contains("v.count > 0 && names[v.val]");
+      // rules of different languages share names: each bar carries its language tag
+      assertThat(js).contains("tag: LANGS[v.val.split(':')[0]]", "'testquality-dart': 'Dart'");
     }
   }
 }

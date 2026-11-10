@@ -12,7 +12,9 @@ window.registerExtension('testquality/testquality', function (options) {
     scope.pullRequest = branchLike.key;
   }
   var SVG = 'http://www.w3.org/2000/svg';
-  var REPOSITORIES = ['testquality-python', 'testquality-js', 'testquality-ts', 'testquality-dart'];
+  // rules of different languages share names: the chart tags each rule with its repository's language
+  var LANGS = {'testquality-python': 'Python', 'testquality-js': 'JS', 'testquality-ts': 'TS', 'testquality-dart': 'Dart'};
+  var REPOSITORIES = Object.keys(LANGS);
   var MUTATION_HINT = 'Set sonar.testquality.mutation.reportPaths';
   var RUN_HINT = 'Set sonar.testquality.junit.reportPaths or sonar.testquality.dart.reportPaths';
   var NAMES = {
@@ -151,10 +153,11 @@ window.registerExtension('testquality/testquality', function (options) {
     var marks = items.map(function (it, i) {
       var y = top + i * row;
       var bw = Math.max(it.value / max * plot, 3);
-      var tip = it.label + ': ' + fmt(it.value) + unit;
-      var label = it.label.length > chars ? '…' + it.label.slice(-(chars - 1)) : it.label;
+      var tip = full(it) + ': ' + fmt(it.value) + unit;
+      var room = chars - (it.tag ? it.tag.length + 2 : 0);
+      var label = it.label.length > room ? '…' + it.label.slice(-(room - 1)) : it.label;
       var kids = [s('title', {}, [tip]), s('rect', {class: 'tq-hit', x: 0, y: y, width: w, height: row, fill: 'transparent'}),
-        s('text', {x: 0, y: y + 12, class: 'tq-label'}, [label]),
+        s('text', {x: 0, y: y + 12, class: 'tq-label'}, [label, it.tag ? s('tspan', {dx: 6, class: 'tq-small'}, [it.tag]) : null]),
         s('rect', {x: 0, y: y + 17, width: bw, height: 10, rx: 2, style: 'fill:' + o.color}),
         s('text', {x: bw + 6, y: y + 26, class: 'tq-val'}, [fmt(it.value) + unit])];
       return it.href ? s('a', {href: it.href, 'aria-label': tip}, kids) : s('g', {}, kids);
@@ -165,8 +168,12 @@ window.registerExtension('testquality/testquality', function (options) {
       marks.push(s('text', {x: x, y: 10, 'text-anchor': x > w - 60 ? 'end' : 'middle', class: 'tq-small'}, [o.ref.label]));
     }
     return s('svg', {width: w, height: top + items.length * row, role: links ? 'group' : 'img',
-      'aria-label': o.label + ': ' + items.map(function (i) { return i.label + ' ' + fmt(i.value) + unit; }).join(', ') +
+      'aria-label': o.label + ': ' + items.map(function (i) { return full(i) + ' ' + fmt(i.value) + unit; }).join(', ') +
         (o.ref ? '; ' + o.ref.label : '')}, marks);
+  }
+
+  function full(it) {
+    return it.tag ? it.label + ' (' + it.tag + ')' : it.label;
   }
 
   function stack(parts, w, label) {
@@ -539,7 +546,7 @@ window.registerExtension('testquality/testquality', function (options) {
       });
   }).then(function (r) {
     var counts = r[1].sort(function (a, b) { return b.count - a.count; }).map(function (v) {
-      return {label: r[0][v.val] || v.val, value: v.count, href: page('project/issues', {resolved: 'false', rules: v.val})};
+      return {label: r[0][v.val] || v.val, tag: LANGS[v.val.split(':')[0]], value: v.count, href: page('project/issues', {resolved: 'false', rules: v.val})};
     });
     if (counts.length === 0) {
       rulePanel.empty('none', 'No open issues of the Test Quality rules');
