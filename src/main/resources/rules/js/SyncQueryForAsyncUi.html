@@ -1,0 +1,15 @@
+<p>A <code>getBy*</code> or <code>queryBy*</code> query right after a user-event v14 action that is not awaited.</p>
+<h2>Why is this an issue?</h2>
+<p>The actions of <code>userEvent.setup()</code> return promises and dispatch their events later. A synchronous query on
+the next statement runs before the action happened: it checks the screen from before the action, so it either fails or
+passes for the wrong reason.</p>
+<h2>Noncompliant code example</h2>
+<pre>
+user.click(screen.getByRole('button'));
+expect(screen.getByText('Saved')).toBeInTheDocument(); // Noncompliant
+</pre>
+<h2>Compliant solution</h2>
+<pre>
+await user.click(screen.getByRole('button'));
+expect(await screen.findByText('Saved')).toBeInTheDocument();
+</pre>

@@ -1,0 +1,17 @@
+<p>A fixed wait in a test: <code>page.waitForTimeout</code>, <code>cy.wait(&lt;number&gt;)</code>, an awaited promise
+around <code>setTimeout</code> or a sleep helper.</p>
+<h2>Why is this an issue?</h2>
+<p>A fixed delay is too long on a fast machine, which makes the suite slow, and too short on a busy CI agent, which makes
+the test flaky. Waiting for the element, the response or the state the test needs is both faster and reliable.</p>
+<p>A wait followed by a check that nothing changed is not reported: the same assertion as before the wait, or a
+synchronous <code>.not</code>, call count, length or number check. Absence can only be checked after a fixed window.</p>
+<h2>Noncompliant code example</h2>
+<pre>
+await page.click('#pay');
+await page.waitForTimeout(3000); // Noncompliant
+</pre>
+<h2>Compliant solution</h2>
+<pre>
+await page.click('#pay');
+await expect(page.getByText('Paid')).toBeVisible();
+</pre>

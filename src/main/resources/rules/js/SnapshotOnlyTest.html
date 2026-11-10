@@ -1,0 +1,22 @@
+<p>A test whose only assertions are file snapshots (<code>toMatchSnapshot</code>, <code>toMatchFileSnapshot</code>)
+accepts whatever was recorded the first time it ran.</p>
+<h2>Why is this an issue?</h2>
+<p>Snapshots are written, not reviewed: a wrong output recorded once becomes the expected value, and large snapshots
+are often updated with <code>-u</code> without reading them. An explicit assertion on the values that matter states
+what the test is about. Inline snapshots, error snapshots and tests that also use throwing queries
+(<code>getBy</code>, <code>findBy</code>) or assertion helpers are not reported.</p>
+<h2>Noncompliant code example</h2>
+<pre>
+it('renders the card', () =&gt; {
+  const { container } = render(&lt;Card title="Hello" /&gt;);
+  expect(container).toMatchSnapshot();
+});
+</pre>
+<h2>Compliant solution</h2>
+<pre>
+it('renders the card', () =&gt; {
+  const { container } = render(&lt;Card title="Hello" /&gt;);
+  expect(screen.getByRole('heading')).toHaveTextContent('Hello');
+  expect(container).toMatchSnapshot();
+});
+</pre>

@@ -1,0 +1,20 @@
+<p>A matcher that cannot fail on the value it is given checks nothing: <code>toBeTruthy()</code> or
+<code>toBeDefined()</code> on a literal, an array or object, a function or a <code>new</code> object, on an unawaited
+<code>findBy</code> promise or on an array from <code>queryAllBy</code> / <code>querySelectorAll</code> /
+<code>filter</code>; <code>toBeDefined()</code> on a query that returns null when nothing matches; a value compared
+with itself.</p>
+<h2>Why is this an issue?</h2>
+<p>An empty array is truthy, a promise is truthy, and null is defined. The test passes even when the element is missing
+or the list is empty.</p>
+<h2>Noncompliant code example</h2>
+<pre>
+expect(screen.queryAllByRole('row')).toBeTruthy();
+expect(screen.queryByText('Saved')).toBeDefined();
+expect(screen.findByText('Saved')).toBeTruthy();
+</pre>
+<h2>Compliant solution</h2>
+<pre>
+expect(screen.queryAllByRole('row')).toHaveLength(2);
+expect(screen.queryByText('Saved')).not.toBeNull();
+expect(await screen.findByText('Saved')).toBeTruthy();
+</pre>
