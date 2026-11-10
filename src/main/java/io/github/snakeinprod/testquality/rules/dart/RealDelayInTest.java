@@ -1,5 +1,6 @@
 package io.github.snakeinprod.testquality.rules.dart;
 
+import io.github.snakeinprod.testquality.lang.dart.DartTrees;
 import io.github.snakeinprod.testquality.model.TestCase;
 import io.github.snakeinprod.testquality.parse.Node;
 import io.github.snakeinprod.testquality.parse.Nodes;
@@ -12,12 +13,17 @@ import java.util.Map;
 /**
  * Future.delayed, sleep or a real Timer in a widget test instead of tester.pump(duration) or fake async. Only waits of the
  * test's own sequence count: an awaited Future.delayed or a sleep as a statement of the body. Delays inside closures
- * (stubs, callbacks, tester.runAsync) and Timers, which are fake in a widget test, are left alone.
+ * (stubs, callbacks, tester.runAsync) and Timers, which are fake in a widget test, are left alone. Silent in files importing
+ * package:integration_test, whose live binding runs on real time, and on a wait with a comment on its line or the line
+ * before: an explained wait is on purpose (a clock that reads system time needs a real sleep).
  */
 public class RealDelayInTest implements TestRule {
 
   @Override
   public void check(RuleContext ctx) {
+    if (DartTrees.imports(ctx.file().root(), "integration_test")) {
+      return;
+    }
     Map<Node.Group, Token> testers = UnawaitedTesterAction.testers(ctx.file());
     for (TestCase tc : ctx.tests().tests()) {
       Token tester = testers.get(tc.bodyGroup());
@@ -27,6 +33,10 @@ public class RealDelayInTest implements TestRule {
       String pump = "\"await " + tester.text() + ".pump(duration)\"";
       UnawaitedTesterAction.statements(tc.bodyGroup(), stmts -> {
         for (List<Node> s : stmts) {
+          int line = s.get(0).first().line();
+          if (DartTrees.commented(ctx.file(), line - 1, line)) {
+            continue;
+          }
           if (s.size() == 2 && Nodes.isIdent(s.get(0), "sleep") && s.get(1) instanceof Node.Group g && g.is("(")) {
             ctx.report(s.get(0).first(), g.last(), "\"sleep(...)\" blocks the widget test for real time; use " + pump
               + " to move the fake clock instead.");

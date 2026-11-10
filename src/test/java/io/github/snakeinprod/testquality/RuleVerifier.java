@@ -90,18 +90,22 @@ public final class RuleVerifier {
         continue;
       }
       checked++;
-      Analyzer.Result r = analyzer.analyze(e.getKey(), e.getValue(), content(root.resolve(e.getKey())));
+      String source = content(root.resolve(e.getKey()));
       Map<Integer, Integer> expected = new TreeMap<>();
       Map<Integer, String> messages = new TreeMap<>();
-      for (Token c : r.file().comments()) {
+      List<Token> marks = new ArrayList<>();
+      for (Token c : analyzer.analyze(e.getKey(), e.getValue(), source).file().comments()) {
         Matcher m = MARK.matcher(c.text());
         if (m.find()) {
+          marks.add(c);
           expected.merge(c.line(), m.group(1) == null ? 1 : Integer.parseInt(m.group(1)), Integer::sum);
           if (m.group(2) != null) {
             messages.put(c.line(), m.group(2));
           }
         }
       }
+      // the marks are blanked out, so a rule that reads comments sees only the fixture's own
+      Analyzer.Result r = analyzer.analyze(e.getKey(), e.getValue(), blank(source, marks));
       Map<Integer, List<String>> actual = new TreeMap<>();
       for (Analyzer.Issue i : r.issues()) {
         actual.computeIfAbsent(i.line(), l -> new ArrayList<>()).add(i.message());
@@ -120,6 +124,20 @@ public final class RuleVerifier {
     }
     assertThat(checked).as("test files checked for " + family + "/" + key).isPositive();
     assertThat(problems).as(family + "/" + key).isEmpty();
+  }
+
+  /** The source with each comment replaced by spaces, lines and columns kept. */
+  private static String blank(String source, List<Token> comments) {
+    String[] lines = source.split("\n", -1);
+    for (Token c : comments) {
+      for (int l = c.line(); l <= c.endLine(); l++) {
+        String s = lines[l - 1];
+        int from = l == c.line() ? c.column() : 0;
+        int to = l == c.endLine() ? Math.min(c.endColumn(), s.length()) : s.length();
+        lines[l - 1] = s.substring(0, from) + " ".repeat(to - from) + s.substring(to);
+      }
+    }
+    return String.join("\n", lines);
   }
 
   private static List<Path> walk(Path dir) {

@@ -6,6 +6,8 @@ class MockRepo extends Mock implements Repo {}
 
 class _Cache extends Mock implements Cache {}
 
+class _Store() extends Mock implements Store;
+
 void main() {
   late MockRepo shared;
 
@@ -41,6 +43,19 @@ void main() {
     final service = Service(logger: logger, repo: shared);
     service.run();
     verify(() => shared.run()).called(1);
+  });
+
+  test('primary constructor mock class', () {
+    final store = _Store(); // Noncompliant
+    Service(store, shared).run();
+    verify(() => shared.run()).called(1);
+  });
+
+  test('http MockClient is a fake with a handler', () {
+    final client = MockClient((request) async => Response('{}', 200));
+    final named = MockSocket(onSend: (m) => sent.add(m));
+    when(() => shared.load()).thenReturn(user);
+    expect(Service(Api(client), Socket(named), shared).current(), user);
   });
 
   test('initial state needs only a dummy', () {

@@ -74,6 +74,10 @@ public class MockNeverVerified implements TestRule {
           }
           j++;
         }
+        // primary constructor: class MockRepo() extends Mock
+        if (j < kids.size() && kids.get(j) instanceof Node.Group params && params.is("(")) {
+          j++;
+        }
         if (j + 1 < kids.size() && Nodes.isIdent(kids.get(j), "extends") && Nodes.isIdent(kids.get(j + 1), "Mock")) {
           out.add(Nodes.leaf(kids.get(i + 1)).text());
         }
@@ -86,7 +90,11 @@ public class MockNeverVerified implements TestRule {
     return declared.contains(name) || name.length() > 4 && name.startsWith("Mock") && Character.isUpperCase(name.charAt(4));
   }
 
-  /** {@code final x = MockX();}, {@code var x = ...}, {@code MockX x = ...} declared in the group, name to name token. */
+  /**
+   * {@code final x = MockX();}, {@code var x = ...}, {@code MockX x = ...} declared in the group, name to name token. A
+   * {@code MockX(...)} with arguments of a class not declared here is a fake with a handler (package:http's
+   * {@code MockClient((request) => ...)}), not a mockito or mocktail mock.
+   */
   static Map<String, Token> localMocks(Node.Group scope, Set<String> classes) {
     Map<String, Token> out = new LinkedHashMap<>();
     Nodes.groups(scope, g -> {
@@ -100,7 +108,7 @@ public class MockNeverVerified implements TestRule {
         boolean cascade = i + 4 < k.size() && Nodes.leaf(k.get(i + 4)) != null && ACCESSORS.contains(Nodes.leaf(k.get(i + 4)).text());
         if (declares && name != null && name.kind() == TokenKind.IDENT && Nodes.isLeaf(k.get(i + 1), "=") && cls != null
           && cls.kind() == TokenKind.IDENT && isMockClass(cls.text(), classes) && k.get(i + 3) instanceof Node.Group args
-          && args.is("(") && !cascade) {
+          && args.is("(") && (args.children().isEmpty() || classes.contains(cls.text())) && !cascade) {
           out.putIfAbsent(name.text(), name);
         }
       }

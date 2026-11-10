@@ -11,7 +11,10 @@ import io.github.snakeinprod.testquality.rules.RuleContext;
 import io.github.snakeinprod.testquality.rules.TestRule;
 import java.util.List;
 
-/** {@code skip: true} or {@code skip: ''} on a test or group, and {@code @Skip()} on the library, give no reason. */
+/**
+ * {@code skip: true} or {@code skip: ''} on a test or group, and {@code @Skip()} on the library, give no reason. A comment
+ * on the line before, on the skip's lines or on the line after is taken as the reason ({@code skip: true, // TODO: #123}).
+ */
 public class SkipWithoutReason implements TestRule {
 
   @Override
@@ -32,7 +35,8 @@ public class SkipWithoutReason implements TestRule {
         continue;
       }
       for (List<Node> item : call.items()) {
-        if (item.size() == 3 && Nodes.isIdent(item.get(0), "skip") && Nodes.isLeaf(item.get(1), ":") && noReason(Nodes.leaf(item.get(2)))) {
+        if (item.size() == 3 && Nodes.isIdent(item.get(0), "skip") && Nodes.isLeaf(item.get(1), ":") && noReason(Nodes.leaf(item.get(2)))
+          && !DartTrees.commented(ctx.file(), item.get(0).first().line() - 1, item.get(2).last().line() + 1)) {
           Token value = Nodes.leaf(item.get(2));
           ctx.report(item.get(0).first(), value, "\"skip: " + value.text() + "\" gives no reason; pass one, as in skip: 'flaky"
             + " on CI, see the issue', so reports say why.");

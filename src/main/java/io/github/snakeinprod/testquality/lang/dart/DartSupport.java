@@ -204,6 +204,10 @@ public class DartSupport implements LanguageSupport {
           }
           j++;
         }
+        // primary constructor: class MockRepo() extends Mock
+        if (j < kids.size() && kids.get(j) instanceof Node.Group params && params.is("(")) {
+          j++;
+        }
         if (j + 1 < kids.size() && Nodes.isIdent(kids.get(j), "extends")
           && (Nodes.isIdent(kids.get(j + 1), "Mock") || Nodes.isIdent(kids.get(j + 1), "Fake"))) {
           out.add(Nodes.leaf(kids.get(i + 1)).text());

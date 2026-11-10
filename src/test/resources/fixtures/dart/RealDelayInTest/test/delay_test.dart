@@ -64,6 +64,14 @@ void main() {
     await tester.binding.delayed(const Duration(seconds: 1));
   });
 
+  testWidgets('an explained wait', (tester) async {
+    await tester.pumpWidget(const App());
+    // The clock reads system time, so it only moves with a real sleep, not with tester.pump()
+    sleep(const Duration(seconds: 1));
+    await Future.delayed(const Duration(milliseconds: 10)); // let the platform channel answer
+    await tester.pumpAndSettle();
+  });
+
   test('a plain test may wait', () async {
     await Future.delayed(const Duration(milliseconds: 10));
     sleep(const Duration(milliseconds: 10));

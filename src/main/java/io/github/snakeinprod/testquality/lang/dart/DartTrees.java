@@ -3,6 +3,7 @@ package io.github.snakeinprod.testquality.lang.dart;
 import io.github.snakeinprod.testquality.parse.Chain;
 import io.github.snakeinprod.testquality.parse.Node;
 import io.github.snakeinprod.testquality.parse.Nodes;
+import io.github.snakeinprod.testquality.parse.ParsedFile;
 import io.github.snakeinprod.testquality.parse.Token;
 import io.github.snakeinprod.testquality.parse.TokenKind;
 import java.util.ArrayList;
@@ -90,6 +91,11 @@ public final class DartTrees {
       }
     }
     return false;
+  }
+
+  /** A comment ends on a line from {@code first} to {@code last}: code there that its author explained. */
+  public static boolean commented(ParsedFile file, int first, int last) {
+    return file.comments().stream().anyMatch(c -> c.endLine() >= first && c.endLine() <= last);
   }
 
   public static boolean isAwaited(Chain c) {
