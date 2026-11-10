@@ -89,3 +89,16 @@ void main() {
     tester.tap(find.text('x'));
   });
 }
+
+void robotTest(String description, Future<void> Function(Robot robot, WidgetTester tester) body) {
+  testWidgets(description, (tester) async {
+    await body(Robot(tester), tester);
+  });
+}
+
+void wrapped() {
+  robotTest('a wrapper passes the tester second', (robot, tester) async {
+    tester.tap(find.text('go')); // Noncompliant {{"tester.tap(...)" is not awaited}}
+    robot.tap(find.text('go'));
+  });
+}

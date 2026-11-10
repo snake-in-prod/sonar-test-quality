@@ -46,6 +46,20 @@ class JsSupportTest {
   }
 
   @Test
+  void local_wrappers_are_test_functions() throws IOException {
+    List<TestCase> tests = tests("wrapper.test.ts");
+    assertThat(tests).extracting(TestCase::name, TestCase::suite, TestCase::async, TestCase::assertions, TestCase::mocks)
+      .containsExactly(
+        tuple("name", "", false, 1, 0),
+        tuple("sees the profile", "users", true, 2, 0),
+        tuple("deletes", "users", true, 1, 1),
+        tuple("plain", "users", false, 1, 0));
+    assertThat(tests.get(1).start().text()).isEqualTo("itWithUser");
+    assertThat(tests.get(1).nameToken().line()).isEqualTo(18);
+    assertThat(tests.get(1).bodyGroup().is("{")).isTrue();
+  }
+
+  @Test
   void jest_positions_and_bodies() throws IOException {
     List<TestCase> t = tests("jest.test.js");
     TestCase first = t.get(0);

@@ -53,7 +53,14 @@ public final class Analyzer {
   private final List<LanguageSupport> supports;
   private final Project project;
   private final Map<String, Map<String, TestRule>> rules = new HashMap<>();
-  private final Map<String, ParsedFile> parsed = new HashMap<>();
+  /** Project files rules read, least recently used dropped beyond the limit: parsing again is cheaper than holding them all. */
+  private final Map<String, ParsedFile> parsed = new LinkedHashMap<>(16, 0.75f, true) {
+    @Override
+    protected boolean removeEldestEntry(Map.Entry<String, ParsedFile> eldest) {
+      return size() > PARSED_LIMIT;
+    }
+  };
+  private static final int PARSED_LIMIT = 2000;
   private final Set<String> unparsable = new HashSet<>();
   private final Map<String, Object> shared = new HashMap<>();
   private final Map<String, Set<String>> familyPaths = new HashMap<>();

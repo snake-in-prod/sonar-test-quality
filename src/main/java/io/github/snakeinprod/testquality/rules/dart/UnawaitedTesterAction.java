@@ -1,5 +1,6 @@
 package io.github.snakeinprod.testquality.rules.dart;
 
+import io.github.snakeinprod.testquality.lang.dart.DartSupport;
 import io.github.snakeinprod.testquality.lang.dart.DartTrees;
 import io.github.snakeinprod.testquality.model.TestCase;
 import io.github.snakeinprod.testquality.parse.Node;
@@ -48,22 +49,25 @@ public class UnawaitedTesterAction implements TestRule {
   }
 
   /**
-   * The tester parameter of every testWidgets / testGoldens closure with a block body, keyed by that body. Arrow bodies
-   * are left out: their expression is returned.
+   * The tester parameter of every testWidgets / testGoldens closure with a block body, keyed by that body, wrappers of
+   * those included. Arrow bodies are left out: their expression is returned.
    */
   static Map<Node.Group, Token> testers(ParsedFile file) {
     Map<Node.Group, Token> out = new IdentityHashMap<>();
+    Map<String, DartSupport.TestFunction> fns = DartSupport.testFunctions(file.root());
     Nodes.groups(file.root(), g -> {
       List<Node> kids = g.children();
       for (int i = 0; i + 1 < kids.size(); i++) {
-        if ((Nodes.isIdent(kids.get(i), "testWidgets") || Nodes.isIdent(kids.get(i), "testGoldens"))
+        Token t = Nodes.leaf(kids.get(i));
+        DartSupport.TestFunction f = t == null || t.kind() != TokenKind.IDENT ? null : fns.get(t.text());
+        if (f != null && f.tester() >= 0 && (f.function().equals("testWidgets") || f.function().equals("testGoldens"))
           && kids.get(i + 1) instanceof Node.Group args && args.is("(")) {
           List<List<Node>> pos = DartTrees.positionalArgs(args);
-          DartTrees.Closure c = pos.size() > 1 ? DartTrees.closure(pos.get(1)) : null;
-          if (c == null || c.arrow() || c.params().items().isEmpty()) {
+          DartTrees.Closure c = pos.size() > f.body() ? DartTrees.closure(pos.get(f.body())) : null;
+          if (c == null || c.arrow() || c.params().items().size() <= f.tester()) {
             continue;
           }
-          List<Node> param = c.params().items().get(0);
+          List<Node> param = c.params().items().get(f.tester());
           Token name = Nodes.leaf(param.get(param.size() - 1));
           if (name != null && name.kind() == TokenKind.IDENT) {
             out.put(c.body(), name);

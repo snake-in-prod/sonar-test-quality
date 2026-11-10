@@ -105,3 +105,23 @@ void main() {
 Future<void> helper() async {
   expectLater(stream, emits(1));
 }
+
+void widgetCase(String name, Future<void> Function(WidgetTester) body) {
+  testWidgets(name, (tester) async {
+    await body(tester);
+  });
+}
+
+void unitCase(String name, Future<void> Function() body) {
+  test(name, () => body());
+}
+
+void wrapped() {
+  widgetCase('a widget test wrapper', (tester) async {
+    expectLater(load(), completes); // Noncompliant
+  });
+
+  unitCase('a unit test wrapper waits for pending matchers', () async {
+    expectLater(load(), completes);
+  });
+}

@@ -46,6 +46,24 @@ class DartSupportTest {
   }
 
   @Test
+  void local_wrappers_are_test_functions() throws IOException {
+    TestFile f = extract("wrapper_test.dart");
+    assertThat(f.tests()).extracting(TestCase::name, TestCase::suite, TestCase::async, TestCase::assertions).containsExactly(
+      tuple("name", "", false, 1),
+      tuple("advances", "slideshow", true, 1),
+      tuple("pauses", "slideshow", true, 2),
+      tuple("computes", "", false, 1));
+    assertThat(f.tests().get(1).start().text()).isEqualTo("slideshowTest");
+    assertThat(f.tests().get(1).bodyGroup().is("{")).isTrue();
+    Map<String, DartSupport.TestFunction> fns = DartSupport.testFunctions(parse(
+      Files.readString(Path.of("src/test/resources/model/dart/wrapper_test.dart"))).root());
+    assertThat(fns.get("slideshowTest")).extracting(DartSupport.TestFunction::function, DartSupport.TestFunction::name,
+      DartSupport.TestFunction::body, DartSupport.TestFunction::tester).containsExactly("testWidgets", 0, 1, 0);
+    assertThat(fns.get("unitTest").function()).isEqualTo("test");
+    assertThat(fns).doesNotContainKey("check");
+  }
+
+  @Test
   void package_test_units_with_nested_groups_and_skip() throws IOException {
     TestFile f = extract("unit_test.dart");
     assertThat(f.tests()).extracting(TestCase::name, TestCase::suite, TestCase::skipped, TestCase::async, TestCase::assertions)

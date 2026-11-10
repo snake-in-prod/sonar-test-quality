@@ -1,5 +1,6 @@
 package io.github.snakeinprod.testquality.rules.dart;
 
+import io.github.snakeinprod.testquality.lang.dart.DartSupport;
 import io.github.snakeinprod.testquality.lang.dart.DartTrees;
 import io.github.snakeinprod.testquality.model.TestCase;
 import io.github.snakeinprod.testquality.parse.Node;
@@ -7,6 +8,7 @@ import io.github.snakeinprod.testquality.parse.Nodes;
 import io.github.snakeinprod.testquality.rules.RuleContext;
 import io.github.snakeinprod.testquality.rules.TestRule;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
 
@@ -21,9 +23,10 @@ public class UnawaitedExpectLater implements TestRule {
 
   @Override
   public void check(RuleContext ctx) {
+    Map<String, DartSupport.TestFunction> fns = DartSupport.testFunctions(ctx.file().root());
     for (TestCase t : ctx.tests().tests()) {
       Node.Group body = t.bodyGroup();
-      if (body == null || !body.is("{") || t.start().is("test")) {
+      if (body == null || !body.is("{") || DartSupport.calls(fns, t, "test")) {
         continue;
       }
       statements(body, s -> {

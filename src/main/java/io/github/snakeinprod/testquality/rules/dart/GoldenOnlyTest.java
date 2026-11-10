@@ -10,6 +10,7 @@ import io.github.snakeinprod.testquality.parse.Nodes;
 import io.github.snakeinprod.testquality.rules.RuleContext;
 import io.github.snakeinprod.testquality.rules.TestRule;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -23,9 +24,10 @@ public class GoldenOnlyTest implements TestRule {
 
   @Override
   public void check(RuleContext ctx) {
+    Map<String, DartSupport.TestFunction> fns = DartSupport.testFunctions(ctx.file().root());
     for (TestCase t : ctx.tests().tests()) {
       Node.Group body = t.bodyGroup();
-      if (body == null || !t.start().is("testWidgets")) {
+      if (body == null || !DartSupport.calls(fns, t, "testWidgets")) {
         continue;
       }
       Chain firstGolden = null;

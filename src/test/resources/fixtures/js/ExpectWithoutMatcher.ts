@@ -82,6 +82,14 @@ describe('user', () => {
   });
 });
 
+function itParsed(name: string, fn: (v: unknown) => void) {
+  it(name, () => fn(parse('{}')));
+}
+
+itParsed('a wrapper body', (v) => {
+  expect(v); // Noncompliant
+});
+
 function assertParsed(v: unknown) {
   expect(v).toBeDefined();
 }

@@ -55,7 +55,7 @@ public class JsSupport implements LanguageSupport {
   @Override
   public TestFile extract(ParsedFile file) {
     List<TestCase> out = new ArrayList<>();
-    visit(file.root(), "", false, out);
+    visit(file.root(), "", false, wrappers(file.root()), out);
     return out.isEmpty() ? TestFile.EMPTY : new TestFile(List.copyOf(out));
   }
 
@@ -172,7 +172,7 @@ public class JsSupport implements LanguageSupport {
     return false;
   }
 
-  private void visit(Node.Group g, String suite, boolean skipped, List<TestCase> out) {
+  private void visit(Node.Group g, String suite, boolean skipped, Map<String, Wrapper> wrappers, List<TestCase> out) {
     Map<Integer, Chain> starts = new HashMap<>();
     for (Chain c : Chains.direct(g)) {
       starts.put(c.from(), c);
@@ -182,10 +182,10 @@ public class JsSupport implements LanguageSupport {
     while (i < kids.size()) {
       Chain c = starts.get(i);
       if (c != null) {
-        i = handle(c, suite, skipped, out);
+        i = handle(c, suite, skipped, wrappers, out);
       } else {
         if (kids.get(i) instanceof Node.Group sub) {
-          visit(sub, suite, skipped, out);
+          visit(sub, suite, skipped, wrappers, out);
         }
         i++;
       }
@@ -193,14 +193,19 @@ public class JsSupport implements LanguageSupport {
   }
 
   /** Records a test or walks into a suite or other chain; returns the child index to continue from. */
-  private int handle(Chain c, String suite, boolean skipped, List<TestCase> out) {
+  private int handle(Chain c, String suite, boolean skipped, Map<String, Wrapper> wrappers, List<TestCase> out) {
     List<Chain.Segment> segs = c.segments();
-    List<String> names = new ArrayList<>();
-    while (names.size() < segs.size() && segs.get(names.size()) instanceof Chain.Name n) {
-      names.add(n.token().text());
-    }
+    List<String> names = leadingNames(c);
     Kind kind = kind(names);
     int k = names.size();
+    Wrapper wrapper = kind == null && k == 1 && k < segs.size() && segs.get(k) instanceof Chain.Call ? wrappers.get(names.get(0)) : null;
+    if (wrapper != null) {
+      return wrapped(c, wrapper, ((Chain.Call) segs.get(k)).args(), suite, skipped, wrappers, out);
+    }
+    if (wrappers.values().stream().anyMatch(w -> c.first().equals(w.inner()))) {
+      // the wrapper's own call: the wrapper's callers are the tests
+      return walkChain(c, suite, skipped, wrappers, out);
+    }
     int end = c.to();
     Node.Group args = null;
     boolean each = names.contains("each");
@@ -219,7 +224,7 @@ public class JsSupport implements LanguageSupport {
     }
     List<List<Node>> items = args == null ? List.of() : args.items();
     if (items.isEmpty() || JsTrees.functionAt(args, 0) != null) {
-      return walkChain(c, suite, skipped, out);
+      return walkChain(c, suite, skipped, wrappers, out);
     }
     JsTrees.Fn fn = callback(args);
     boolean todo = names.contains("todo");
@@ -227,7 +232,7 @@ public class JsSupport implements LanguageSupport {
       && Nodes.leaf(items.get(items.size() - 1).get(0)) != null
       && Nodes.leaf(items.get(items.size() - 1).get(0)).kind() == TokenKind.IDENT;
     if (fn == null && !todo && !reference) {
-      return walkChain(c, suite, skipped, out);
+      return walkChain(c, suite, skipped, wrappers, out);
     }
     List<Node> nameItem = items.get(0);
     Token nameToken = nameItem.get(0).first();
@@ -235,35 +240,137 @@ public class JsSupport implements LanguageSupport {
     boolean skip = skipped || names.get(0).startsWith("x") || names.stream().anyMatch(SKIP_MODS::contains);
     if (kind == Kind.SUITE) {
       if (fn != null) {
-        visit(fn.body(), suite.isEmpty() ? name : suite + " > " + name, skip, out);
+        visit(fn.body(), suite.isEmpty() ? name : suite + " > " + name, skip, wrappers, out);
       }
       return end;
     }
+    // a single plain parameter of a non-table test is the done callback
+    boolean done = fn != null && !each && fn.paramCount() == 1 && fn.simpleParams().size() == 1;
+    out.add(test(name, suite, nameToken, c, args, fn, skip, done));
+    return end;
+  }
+
+  private static TestCase test(String name, String suite, Token nameToken, Chain c, Node.Group args, JsTrees.Fn fn, boolean skip,
+    boolean done) {
     int assertions = 0;
     int mocks = 0;
-    boolean async = false;
     if (fn != null) {
       assertions = JsTrees.assertCalls(fn.body());
       for (Chain ch : Chains.in(fn.body())) {
         assertions += JsTrees.isAssertion(ch) ? 1 : 0;
         mocks += JsTrees.isMock(ch) ? 1 : 0;
       }
-      // a single plain parameter of a non-table test is the done callback
-      boolean done = !each && fn.paramCount() == 1 && fn.simpleParams().size() == 1;
-      async = fn.async() || done;
     }
     Token last = args.close() != null ? args.close() : args.last();
-    out.add(new TestCase(name, suite, nameToken, c.first(), last, fn == null ? null : fn.body(), skip, async, assertions, mocks));
-    return end;
+    return new TestCase(name, suite, nameToken, c.first(), last, fn == null ? null : fn.body(), skip, fn != null && fn.async() || done,
+      assertions, mocks);
+  }
+
+  /**
+   * A function of the same file that passes its own parameters to a test function as name and body, such as
+   * {@code function itWithUser(name, fn) { it(name, async () => fn(await login())); }} or
+   * {@code const itAsAdmin = (name, fn) => test(name, fn)}. Each call of it with a literal name and a function is a test;
+   * its own call of the test function is not.
+   *
+   * @param name  index of the parameter holding the test name
+   * @param body  index of the parameter holding the test body
+   * @param inner the wrapper's call of the test function
+   */
+  private record Wrapper(int name, int body, Token inner) {
+  }
+
+  /** The wrappers declared in the file, by name. */
+  private static Map<String, Wrapper> wrappers(Node.Group root) {
+    Map<String, Wrapper> out = new HashMap<>();
+    Nodes.groups(root, g -> {
+      List<Node> kids = g.children();
+      for (int i = 0; i + 1 < kids.size(); i++) {
+        Token t = Nodes.leaf(kids.get(i));
+        Token name = null;
+        JsTrees.Fn fn = null;
+        if (t != null && t.isIdent("function")) {
+          name = Nodes.leaf(kids.get(i + 1));
+          fn = JsTrees.functionAt(g, i);
+        } else if (t != null && t.is("=") && i > 0) {
+          name = Nodes.leaf(kids.get(i - 1));
+          fn = JsTrees.functionAt(g, i + 1);
+        }
+        Wrapper w = fn == null || fn.params() == null || name == null || name.kind() != TokenKind.IDENT
+          || kind(List.of(name.text())) != null ? null : wrapper(fn);
+        if (w != null) {
+          out.put(name.text(), w);
+        }
+      }
+    });
+    return out;
+  }
+
+  /** The test call of a function whose name argument is a parameter and whose body is another parameter or calls it. */
+  private static Wrapper wrapper(JsTrees.Fn fn) {
+    List<String> params = fn.params().items().stream().map(item -> Nodes.text(item.get(0))).toList();
+    for (Chain c : Chains.in(fn.body())) {
+      List<String> names = leadingNames(c);
+      if (kind(names) != Kind.TEST || names.contains("each") || names.size() >= c.segments().size()
+        || !(c.segments().get(names.size()) instanceof Chain.Call call)) {
+        continue;
+      }
+      List<List<Node>> items = call.items();
+      int name = items.size() < 2 || items.get(0).size() != 1 ? -1 : params.indexOf(Nodes.text(items.get(0)));
+      if (name < 0) {
+        continue;
+      }
+      for (List<Node> item : items.subList(1, items.size())) {
+        int body = item.size() == 1 ? params.indexOf(Nodes.text(item)) : -1;
+        for (Chain b : body >= 0 ? List.<Chain>of() : Chains.in(new Node.Group(null, null, item))) {
+          int p = params.indexOf(b.firstName());
+          body = body < 0 && p >= 0 && p != name && b.callAfter(0) != null ? p : body;
+        }
+        if (body >= 0 && body != name) {
+          return new Wrapper(name, body, c.first());
+        }
+      }
+    }
+    return null;
+  }
+
+  /** A call of a wrapper: a test when the name is a string literal and the body a function literal. */
+  private int wrapped(Chain c, Wrapper w, Node.Group args, String suite, boolean skipped, Map<String, Wrapper> wrappers,
+    List<TestCase> out) {
+    List<List<Node>> items = args.items();
+    JsTrees.Fn fn = null;
+    int item = 0;
+    List<Node> kids = args.children();
+    for (int i = 0; i < kids.size() && fn == null; i++) {
+      if (Nodes.isLeaf(kids.get(i), ",") && Nodes.leaf(kids.get(i)).kind() == TokenKind.OP) {
+        item++;
+      } else if (item == w.body() && (i == 0 || Nodes.isLeaf(kids.get(i - 1), ","))) {
+        fn = JsTrees.functionAt(args, i);
+      }
+    }
+    Token nameToken = items.size() > w.name() && items.get(w.name()).size() == 1 ? items.get(w.name()).get(0).first() : null;
+    if (fn == null || nameToken == null || nameToken.kind() != TokenKind.STRING) {
+      return walkChain(c, suite, skipped, wrappers, out);
+    }
+    out.add(test(unquote(nameToken.text()), suite, nameToken, c, args, fn, skipped, false));
+    return c.to();
+  }
+
+  /** The names before the first call or index: [it, only] for {@code it.only("x", fn)}. */
+  private static List<String> leadingNames(Chain c) {
+    List<String> names = new ArrayList<>();
+    while (names.size() < c.segments().size() && c.segments().get(names.size()) instanceof Chain.Name n) {
+      names.add(n.token().text());
+    }
+    return names;
   }
 
   /** Not a test or suite: walks into the chain's call arguments and index groups. */
-  private int walkChain(Chain c, String suite, boolean skipped, List<TestCase> out) {
+  private int walkChain(Chain c, String suite, boolean skipped, Map<String, Wrapper> wrappers, List<TestCase> out) {
     for (Chain.Segment s : c.segments()) {
       if (s instanceof Chain.Call call) {
-        visit(call.args(), suite, skipped, out);
+        visit(call.args(), suite, skipped, wrappers, out);
       } else if (s instanceof Chain.Index idx) {
-        visit(idx.index(), suite, skipped, out);
+        visit(idx.index(), suite, skipped, wrappers, out);
       }
     }
     return c.to();

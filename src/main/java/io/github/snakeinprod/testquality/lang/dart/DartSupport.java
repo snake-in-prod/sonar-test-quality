@@ -56,7 +56,8 @@ public class DartSupport implements LanguageSupport {
   @Override
   public TestFile extract(ParsedFile file) {
     List<TestCase> out = new ArrayList<>();
-    walk(file.root(), "", false, DartTrees.imports(file.root(), "bloc_test"), mockClasses(file.root()), out);
+    walk(file.root(), "", false, DartTrees.imports(file.root(), "bloc_test"), mockClasses(file.root()), testFunctions(file.root()),
+      out);
     return out.isEmpty() ? TestFile.EMPTY : new TestFile(List.copyOf(out));
   }
 
@@ -158,21 +159,29 @@ public class DartSupport implements LanguageSupport {
     }
   }
 
-  private static void walk(Node.Group g, String suite, boolean skipped, boolean blocTests, Set<String> mockClasses, List<TestCase> out) {
+  private static void walk(Node.Group g, String suite, boolean skipped, boolean blocTests, Set<String> mockClasses,
+    Map<String, TestFunction> fns, List<TestCase> out) {
     List<Node> kids = g.children();
     for (int i = 0; i < kids.size(); i++) {
       Node n = kids.get(i);
       Token t = Nodes.leaf(n);
       boolean bloc = blocTests && t != null && t.isIdent("blocTest");
       int a = bloc ? afterTypeArgs(kids, i + 1) : i + 1;
-      if (t != null && t.kind() == TokenKind.IDENT && (TEST_FUNCTIONS.contains(t.text()) || t.is("group") || bloc) && isCall(kids, i, a)) {
+      TestFunction fn = t == null || t.kind() != TokenKind.IDENT ? null : fns.get(t.text());
+      if (t != null && t.kind() == TokenKind.IDENT && (fn != null || t.is("group") || bloc) && isCall(kids, i, a)) {
         Node.Group args = (Node.Group) kids.get(a);
-        List<List<Node>> positional = DartTrees.positionalArgs(args);
-        if (positional.isEmpty()) {
+        if (fn != null && fns.values().stream().anyMatch(w -> t.equals(w.inner()))) {
+          // the wrapper's own call: the wrapper's callers are the tests
+          i = a;
           continue;
         }
-        Token nameToken = nameToken(positional.get(0));
-        String name = name(positional.get(0));
+        List<List<Node>> positional = DartTrees.positionalArgs(args);
+        int nameAt = fn == null ? 0 : fn.name();
+        if (positional.size() <= nameAt || fn != null && fn.inner() != null && !literal(positional.get(nameAt))) {
+          continue;
+        }
+        Token nameToken = nameToken(positional.get(nameAt));
+        String name = name(positional.get(nameAt));
         if (bloc) {
           Map<String, List<Node>> named = DartTrees.namedArgs(args);
           int expects = (named.containsKey("expect") ? 1 : 0) + (named.containsKey("errors") ? 1 : 0);
@@ -182,9 +191,10 @@ public class DartSupport implements LanguageSupport {
           continue;
         }
         boolean skip = skipped || isSkip(args);
-        DartTrees.Closure closure = positional.size() > 1 ? DartTrees.closure(positional.get(1)) : null;
-        if (t.is("group")) {
-          walk(args, suite.isEmpty() ? name : suite + " > " + name, skip, blocTests, mockClasses, out);
+        int bodyAt = fn == null ? 1 : fn.body();
+        DartTrees.Closure closure = positional.size() > bodyAt ? DartTrees.closure(positional.get(bodyAt)) : null;
+        if (fn == null) {
+          walk(args, suite.isEmpty() ? name : suite + " > " + name, skip, blocTests, mockClasses, fns, out);
         } else {
           Node.Group body = closure == null ? null : closure.body();
           out.add(new TestCase(name, suite, nameToken, t, args.last(), body, skip, closure != null && closure.async(),
@@ -192,9 +202,106 @@ public class DartSupport implements LanguageSupport {
         }
         i = a;
       } else if (n instanceof Node.Group sub) {
-        walk(sub, suite, skipped, blocTests, mockClasses, out);
+        walk(sub, suite, skipped, blocTests, mockClasses, fns, out);
       }
     }
+  }
+
+  /**
+   * A function that runs a test: {@code test}, {@code testWidgets}, {@code testGoldens}, or a function of the same file
+   * that passes its own parameters to one of them as name and body, such as {@code void slideshowTest(String name,
+   * Future<void> Function(WidgetTester) body) { testWidgets(name, (t) async { await body(t); }); }}. Each call of such a
+   * wrapper with a literal name is a test; its own call of the framework function is not.
+   *
+   * @param function the framework function it calls
+   * @param name     index of the positional argument holding the test name
+   * @param body     index of the positional argument holding the test body
+   * @param tester   index of the body's parameter that gets the WidgetTester, -1 when unknown
+   * @param inner    the wrapper's call of the framework function, null for the framework functions
+   */
+  public record TestFunction(String function, int name, int body, int tester, Token inner) {
+  }
+
+  /** The framework test functions and the wrappers declared in the file, by name. */
+  public static Map<String, TestFunction> testFunctions(Node.Group root) {
+    Map<String, TestFunction> out = new HashMap<>();
+    for (String f : TEST_FUNCTIONS) {
+      out.put(f, new TestFunction(f, 0, 1, 0, null));
+    }
+    Nodes.groups(root, g -> {
+      List<Node> kids = g.children();
+      for (int i = 0; i + 1 < kids.size(); i++) {
+        Token t = Nodes.leaf(kids.get(i));
+        Token prev = i > 0 ? Nodes.leaf(kids.get(i - 1)) : null;
+        if (t != null && t.kind() == TokenKind.IDENT && !TEST_FUNCTIONS.contains(t.text()) && !Chains.keywords("dart").contains(t.text())
+          && (prev == null || !ACCESSORS.contains(prev.text()))) {
+          DartTrees.Closure decl = DartTrees.closureAt(kids, i + 1);
+          TestFunction w = decl == null ? null : wrapper(decl);
+          if (w != null) {
+            out.put(t.text(), w);
+          }
+        }
+      }
+    });
+    return out;
+  }
+
+  /**
+   * The test function a declaration wraps: it calls one with a parameter as the name, and as the body either another
+   * parameter or a closure that calls that parameter.
+   */
+  private static TestFunction wrapper(DartTrees.Closure decl) {
+    List<String> params = new ArrayList<>();
+    for (List<Node> item : decl.params().items()) {
+      if (item.get(0) instanceof Node.Group) {
+        break; // {named} or [optional] parameters
+      }
+      params.add(Nodes.text(item.get(item.size() - 1)));
+    }
+    for (Chain c : Chains.in(decl.body(), Chains.keywords("dart"))) {
+      Chain.Call call = c.callAfter(0);
+      if (call == null || c.segments().size() != 2 || !TEST_FUNCTIONS.contains(c.firstName())) {
+        continue;
+      }
+      List<List<Node>> pos = DartTrees.positionalArgs(call.args());
+      int name = pos.size() < 2 || pos.get(0).size() != 1 ? -1 : params.indexOf(Nodes.text(pos.get(0)));
+      if (name < 0) {
+        continue;
+      }
+      int direct = pos.get(1).size() == 1 ? params.indexOf(Nodes.text(pos.get(1))) : -1;
+      if (direct >= 0 && direct != name) {
+        return new TestFunction(c.firstName(), name, direct, 0, c.first());
+      }
+      DartTrees.Closure inner = DartTrees.closure(pos.get(1));
+      if (inner == null) {
+        continue;
+      }
+      List<List<Node>> innerParams = inner.params().items();
+      String tester = innerParams.isEmpty() ? null : Nodes.text(innerParams.get(0).get(innerParams.get(0).size() - 1));
+      for (Chain b : Chains.in(inner.body(), Chains.keywords("dart"))) {
+        int body = params.indexOf(b.firstName());
+        if (body >= 0 && body != name && b.callAfter(0) != null) {
+          List<List<Node>> bodyArgs = DartTrees.positionalArgs(b.callAfter(0).args());
+          int at = -1;
+          for (int k = 0; k < bodyArgs.size() && at < 0; k++) {
+            at = bodyArgs.get(k).size() == 1 && Nodes.text(bodyArgs.get(k)).equals(tester) ? k : -1;
+          }
+          return new TestFunction(c.firstName(), name, body, at, c.first());
+        }
+      }
+    }
+    return null;
+  }
+
+  /** The test is a call of {@code function}, directly or through a wrapper. */
+  public static boolean calls(Map<String, TestFunction> fns, TestCase t, String function) {
+    TestFunction f = fns.get(t.start().text());
+    return f != null && f.function().equals(function);
+  }
+
+  private static boolean literal(List<Node> arg) {
+    Token t = Nodes.leaf(arg.get(0));
+    return t != null && t.kind() == TokenKind.STRING;
   }
 
   /** {@code name(...)} as a call: not a member ({@code x.test(...)}) and not a declaration ({@code void test() {}}). */
