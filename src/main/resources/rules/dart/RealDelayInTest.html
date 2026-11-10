@@ -1,0 +1,18 @@
+<p>A widget test runs on a fake clock. Awaiting <code>Future.delayed</code> or calling <code>sleep</code> in the test body
+waits for real time instead of moving that clock.</p>
+<h2>Why is this an issue?</h2>
+<p>Under the fake clock the delay never completes until something pumps, so the test hangs or times out; under a live
+binding it makes the suite slow and the result depends on the machine. <code>tester.pump(duration)</code> moves the
+fake clock exactly; real waits that are needed belong in <code>tester.runAsync</code>.</p>
+<h2>Noncompliant code example</h2>
+<pre>
+await tester.pumpWidget(const MyApp());
+await Future.delayed(const Duration(seconds: 1)); // Noncompliant
+expect(find.text('Home'), findsOneWidget);
+</pre>
+<h2>Compliant solution</h2>
+<pre>
+await tester.pumpWidget(const MyApp());
+await tester.pump(const Duration(seconds: 1));
+expect(find.text('Home'), findsOneWidget);
+</pre>

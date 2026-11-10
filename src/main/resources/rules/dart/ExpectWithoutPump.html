@@ -1,0 +1,17 @@
+<p>A gesture or key event (<code>tap</code>, <code>longPress</code>, <code>drag</code>, <code>fling</code>,
+<code>sendKeyEvent</code>) changes state but builds no frame. An <code>expect</code> with a finder matcher right after it,
+with no <code>pump</code> in between, looks at the widget tree from before the action.</p>
+<h2>Why is this an issue?</h2>
+<p><code>findsNothing</code> then passes whatever the action does, and <code>findsOneWidget</code> fails on a working
+screen. Pump a frame (or settle the animations) before checking what the action changed.</p>
+<h2>Noncompliant code example</h2>
+<pre>
+await tester.tap(find.byKey(saveKey));
+expect(find.text('Saved'), findsOneWidget); // Noncompliant
+</pre>
+<h2>Compliant solution</h2>
+<pre>
+await tester.tap(find.byKey(saveKey));
+await tester.pump();
+expect(find.text('Saved'), findsOneWidget);
+</pre>

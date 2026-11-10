@@ -1,0 +1,17 @@
+<p>A <code>WidgetTester</code> action such as <code>tap</code>, <code>enterText</code>, <code>pump</code> or <code>pumpWidget</code>
+returns a future. Called without <code>await</code>, the test goes on before the action is done.</p>
+<h2>Why is this an issue?</h2>
+<p>The expectations that follow check the screen as it was before the action, so the test can pass while the feature is
+broken, or fail at random. Flutter also reports overlapping guarded calls when the next tester call starts too early.</p>
+<h2>Noncompliant code example</h2>
+<pre>
+tester.tap(find.byKey(saveKey)); // Noncompliant
+await tester.pump();
+expect(find.text('Saved'), findsOneWidget);
+</pre>
+<h2>Compliant solution</h2>
+<pre>
+await tester.tap(find.byKey(saveKey));
+await tester.pump();
+expect(find.text('Saved'), findsOneWidget);
+</pre>
