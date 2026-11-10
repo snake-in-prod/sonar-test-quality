@@ -1,0 +1,15 @@
+<p>Two tests with the same literal name in one <code>describe</code> block.</p>
+<h2>Why is this an issue?</h2>
+<p>Test reports, <code>-t</code> filters and snapshot keys use the full test name, so one of the two tests is hidden or
+overwrites the results of the other. It is usually a copied test whose name was not updated, so the case it was meant to
+check is not named anywhere.</p>
+<h2>Noncompliant code example</h2>
+<pre>
+it('saves the user', () =&gt; { ... });
+it('saves the user', () =&gt; { ... }); // Noncompliant
+</pre>
+<h2>Compliant solution</h2>
+<pre>
+it('saves the user', () =&gt; { ... });
+it('saves the user when offline', () =&gt; { ... });
+</pre>
