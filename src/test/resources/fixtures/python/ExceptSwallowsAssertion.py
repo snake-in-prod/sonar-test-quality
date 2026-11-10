@@ -98,6 +98,13 @@ def test_retry_loop():
     assert service.ready()
 
 
+def test_either_order():
+    try:
+        assert lines == sorted_by_int
+    except AssertionError:
+        assert lines == sorted_by_str
+
+
 def test_no_assertion_in_try():
     try:
         compute()

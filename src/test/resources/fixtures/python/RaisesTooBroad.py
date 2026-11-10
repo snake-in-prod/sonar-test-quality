@@ -94,6 +94,20 @@ def test_compound_body():
         cleanup()
 
 
+def test_context_manager_lets_errors_through():
+    server = make_server()
+    with pytest.raises(Exception):
+        with server:
+            raise Exception()
+
+
+def test_resources_close_on_error(ctx):
+    with pytest.raises(errors.Closing):
+        first = ctx.with_resource(Resource())
+        second = ctx.with_resource(Resource())
+        raise errors.Closing()
+
+
 def test_custom_exception_class():
     with pytest.raises(errors.Exception):
         parse("x")

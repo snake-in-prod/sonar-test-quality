@@ -13,12 +13,14 @@ import io.github.snakeinprod.testquality.parse.TokenKind;
 import io.github.snakeinprod.testquality.rules.RuleContext;
 import io.github.snakeinprod.testquality.rules.TestRule;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 /**
  * time.sleep in a test makes it slow, and flaky when it waits for something. Only direct calls in the test body count
  * (not in nested functions or lambdas, which usually simulate slow work), {@code sleep(0)} is ignored, and a file that
- * patches sleep anywhere ("sleep" in a string) stays silent.
+ * patches sleep anywhere ("sleep" in a string) stays silent, and so does a test that names a timeout (it sleeps to
+ * cross that timeout on purpose).
  */
 public class SleepInTest implements TestRule {
 
@@ -31,7 +33,7 @@ public class SleepInTest implements TestRule {
       return;
     }
     for (TestCase t : ctx.tests().tests()) {
-      if (t.body() instanceof PyStatement def) {
+      if (t.body() instanceof PyStatement def && !namesTimeout(def)) {
         visit(ctx, m, def.body());
       }
     }
@@ -54,6 +56,11 @@ public class SleepInTest implements TestRule {
       }
       visit(ctx, m, s.body());
     }
+  }
+
+  private static boolean namesTimeout(PyStatement def) {
+    return def.walk().stream().anyMatch(s -> Nodes.tokens(s.nodes()).stream().anyMatch(
+      t -> t.kind() == TokenKind.IDENT && t.text().toLowerCase(Locale.ROOT).contains("timeout")));
   }
 
   private static boolean zero(Chain.Call call) {

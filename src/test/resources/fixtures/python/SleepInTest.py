@@ -53,6 +53,15 @@ def test_slow_work_in_lambda():
     assert run_with_timeout(lambda: time.sleep(2), 1) is None
 
 
+def test_server_drops_idle_connection():
+    server = make_server(request_timeout=1)
+    with server as address:
+        sock = connect(address)
+        time.sleep(1.5)
+        sock.sendall(b"late")
+    assert server.results[0] == b""
+
+
 def test_other_sleep(fake_clock):
     fake_clock.sleep(10)
     assert expired()

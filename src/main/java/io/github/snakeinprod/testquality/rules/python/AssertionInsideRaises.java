@@ -77,6 +77,10 @@ public class AssertionInsideRaises implements TestRule {
 
   /** The {@code pytest.raises(...)} or {@code self.assertRaises*(...)} call of a with header, unless it expects AssertionError. */
   private static Chain raises(PyModule m, PyStatement with) {
+    if (Nodes.tokens(with.nodes()).stream().anyMatch(t -> t.isIdent("if"))) {
+      // "pytest.raises(E) if bad else nullcontext()": the assertions run in the other case
+      return null;
+    }
     for (Chain c : Chains.in(with.group(), KW)) {
       List<String> head = head(c);
       boolean pytest = m.resolve(String.join(".", head)).equals("pytest.raises");

@@ -114,6 +114,26 @@ class PythonSupportTest {
   }
 
   @Test
+  void fixtures_named_test_are_not_tests() {
+    TestFile f = extract("""
+      import pytest
+      from pytest import fixture
+
+      @pytest.fixture
+      def test_apps(monkeypatch):
+          monkeypatch.syspath_prepend("apps")
+
+      @fixture(scope="module")
+      def test_client():
+          return 1
+
+      def test_real(test_client):
+          assert test_client
+      """);
+    assertThat(f.tests()).extracting(TestCase::name).containsExactly("test_real");
+  }
+
+  @Test
   void no_tests_gives_empty() {
     assertThat(extract("def helper():\n    return 1\n")).isSameAs(TestFile.EMPTY);
     assertThat(extract("")).isSameAs(TestFile.EMPTY);

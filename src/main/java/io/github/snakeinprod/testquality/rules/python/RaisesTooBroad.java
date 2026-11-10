@@ -68,6 +68,10 @@ public class RaisesTooBroad implements TestRule {
     }
     String code = code(ctx.file(), c);
     List<Node> exc = args.get(0);
+    if (with && raisesItself(s, exc)) {
+      // the test raises it on purpose, to check that a context manager lets it through
+      return;
+    }
     if (exc.size() == 1 && Nodes.leaf(exc.get(0)) != null && Nodes.leaf(exc.get(0)).kind() == TokenKind.IDENT
       && BROAD.contains(Nodes.leaf(exc.get(0)).text())) {
       Token e = Nodes.leaf(exc.get(0));
@@ -107,6 +111,22 @@ public class RaisesTooBroad implements TestRule {
 
   private static boolean after(Token a, Token b) {
     return a.line() > b.line() || a.line() == b.line() && a.column() > b.column();
+  }
+
+  /** The block holds {@code raise E(...)} or {@code raise E} of the expected class {@code E} as written. */
+  private static boolean raisesItself(PyStatement with, List<Node> exception) {
+    String expected = Nodes.text(exception);
+    return with.walk().stream().anyMatch(x -> {
+      List<Node> n = x.nodes();
+      if (!x.keyword().equals("raise") || n.size() < 2) {
+        return false;
+      }
+      int end = n.size();
+      if (n.get(end - 1) instanceof Node.Group g && g.is("(")) {
+        end--;
+      }
+      return Nodes.text(n.subList(1, end)).equals(expected);
+    });
   }
 
   private static boolean callsSomething(PyStatement s) {

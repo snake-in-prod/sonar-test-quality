@@ -53,7 +53,7 @@ public class PythonSupport implements LanguageSupport {
     boolean skipAll = markedSkip(m, m.statements());
     Set<String> testCases = new HashSet<>();
     for (PyStatement s : m.statements()) {
-      if (s.keyword().equals("def") && isTestName(s.name())) {
+      if (isTestDef(m, s)) {
         out.add(test(m, s, "", skipAll, List.of()));
       } else if (s.keyword().equals("class")) {
         testClass(m, s, "", skipAll, List.of(), testCases, out);
@@ -81,7 +81,7 @@ public class PythonSupport implements LanguageSupport {
     List<PyStatement> decorators = new ArrayList<>(outerDecorators);
     decorators.addAll(cls.decorators());
     for (PyStatement s : cls.body()) {
-      if (s.keyword().equals("def") && isTestName(s.name())) {
+      if (isTestDef(m, s)) {
         out.add(test(m, s, suite, skip, decorators));
       } else if (s.keyword().equals("class")) {
         testClass(m, s, suite, skip, decorators, testCases, out);
@@ -116,8 +116,15 @@ public class PythonSupport implements LanguageSupport {
     return new TestCase(def.name(), suite, def.nameToken(), start, def.last(), def, skipped, def.isAsync(), assertions, mocks);
   }
 
-  private static boolean isTestName(String name) {
-    return name != null && name.startsWith("test");
+  /** A def named test* that is not a {@code @pytest.fixture} (a fixture named {@code test_app} is not collected). */
+  private static boolean isTestDef(PyModule m, PyStatement s) {
+    return s.keyword().equals("def") && s.name() != null && s.name().startsWith("test")
+      && s.decorators().stream().noneMatch(d -> isFixture(m, d));
+  }
+
+  private static boolean isFixture(PyModule m, PyStatement decorator) {
+    List<Chain> chains = Chains.direct(decorator.group());
+    return !chains.isEmpty() && m.resolve(String.join(".", head(chains.get(0)))).equals("pytest.fixture");
   }
 
   /** {@code self.assert*(...)}, {@code self.fail(...)}, {@code pytest.raises(...)}, {@code pytest.warns(...)}, {@code m.assert_*(...)}. */

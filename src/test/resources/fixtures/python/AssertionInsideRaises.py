@@ -97,6 +97,17 @@ def test_compound_before():
         assert flag
 
 
+@pytest.mark.parametrize("exception", [None, ValueError])
+def test_raises_only_in_some_cases(runner, exception):
+    with (
+        pytest.raises(exception, match="bad")
+        if exception
+        else nullcontext()
+    ):
+        result = runner.invoke(cmd)
+        assert "bad" in result.stderr
+
+
 def test_other_context_manager():
     with mock.patch("app.send"):
         run()
