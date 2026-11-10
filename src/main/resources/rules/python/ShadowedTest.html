@@ -1,0 +1,21 @@
+<p>A second <code>def test_x</code> (or <code>class TestX</code>) with the same name in a module or class replaces the first
+one. The runner only sees the last definition, so the first test never runs and nobody notices.</p>
+<h2>Why is this an issue?</h2>
+<p>Copy-pasted tests that keep the original name silently drop coverage. Definitions under <code>if</code> / <code>try</code>
+branches, property setters and names used between the two definitions are not reported.</p>
+<h2>Noncompliant code example</h2>
+<pre>
+def test_login():
+    assert login("a", "b")
+
+def test_login():  # Noncompliant
+    assert login("a", "c")
+</pre>
+<h2>Compliant solution</h2>
+<pre>
+def test_login_with_valid_password():
+    assert login("a", "b")
+
+def test_login_with_other_password():
+    assert login("a", "c")
+</pre>

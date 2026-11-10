@@ -1,0 +1,31 @@
+<p>pytest collects functions whose names start with <code>test</code> and classes whose names start with <code>Test</code>
+(without an <code>__init__</code>); unittest runs methods starting with <code>test</code>. A function with assertions named
+otherwise is never run.</p>
+<h2>Why is this an issue?</h2>
+<p>The test looks like it protects the code but never executes. Only functions that cannot be helpers are reported: no
+parameters, no decorator, not referenced anywhere in the project, in a file that has collected tests. Setup and teardown
+methods and pytest hooks are ignored.</p>
+<h2>Noncompliant code example</h2>
+<pre>
+def check_login():  # Noncompliant
+    assert login()
+
+class TestOrders:
+    def __init__(self):  # Noncompliant
+        self.orders = []
+
+    def test_empty(self):
+        assert not self.orders
+</pre>
+<h2>Compliant solution</h2>
+<pre>
+def test_login():
+    assert login()
+
+class TestOrders:
+    def setup_method(self):
+        self.orders = []
+
+    def test_empty(self):
+        assert not self.orders
+</pre>
