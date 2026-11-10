@@ -1,0 +1,16 @@
+<p><code>completion</code>, <code>completes</code>, the <code>emits</code> family and <code>throwsA</code> on a future
+check asynchronously. In a widget test the code runs in a fake-async zone that only moves forward when the test pumps,
+so <code>expect(future, completion(...))</code> may settle after the test has ended, or never. Only widget tests are
+checked: a plain <code>test</code> waits for an async matcher on its own.</p>
+<h2>Noncompliant code example</h2>
+<pre>
+testWidgets('loads items', (tester) async {
+  expect(repo.load(), completion(isNotEmpty)); // Noncompliant
+});
+</pre>
+<h2>Compliant solution</h2>
+<pre>
+testWidgets('loads items', (tester) async {
+  await expectLater(repo.load(), completion(isNotEmpty));
+});
+</pre>
