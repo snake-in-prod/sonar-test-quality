@@ -18,13 +18,15 @@ import java.util.Set;
  * page.waitForTimeout or a fixed setTimeout delay makes tests slow and flaky. Reports Playwright
  * {@code waitForTimeout}, Cypress {@code cy.wait(<number>)}, {@code await new Promise(r => setTimeout(r, <number>))},
  * {@code await setTimeout(<number>)} (timers/promises) and {@code await sleep(<number>)} of a sleep helper defined in the
- * file. setTimeout forms stay silent under fake timers and for delays below {@link #MIN_DELAY} ms (flush idioms). A wait
+ * file. setTimeout forms stay silent under fake timers and for delays below {@link #MIN_DELAY} ms (flush
+ * idioms, a tick between two records so their timestamps differ). A wait
  * followed by a check that nothing changed (an assertion repeated from before the wait, or a synchronous count or
  * {@code .not} assertion) stays silent: absence can only be checked after a fixed window.
  */
 public class WaitForTimeout implements TestRule {
 
-  private static final double MIN_DELAY = 10;
+  /** ponytail: fixed threshold; shorter setTimeout delays are ticks (flushes, distinct timestamps between seeds). */
+  private static final double MIN_DELAY = 100;
 
   @Override
   public void check(RuleContext ctx) {

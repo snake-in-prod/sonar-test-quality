@@ -56,7 +56,7 @@ public class ExpectWithoutMatcher implements TestRule {
       }
       lastName = n;
     }
-    if (!isStatement(c)) {
+    if (!isStatement(c) || assertsItself(args.items().get(0))) {
       return;
     }
     String expect = source(ctx.file(), c.first(), args.args().last());
@@ -67,6 +67,15 @@ public class ExpectWithoutMatcher implements TestRule {
       ctx.report(lastName.token(), "\"" + lastName.token().text() + "\" is not called, so \"" + expect
         + "\" checks nothing; add the call parentheses.");
     }
+  }
+
+  /**
+   * The argument is a call to an assertion helper, {@code expect(assertSelected(a))}: the helper checks, the bare
+   * expect around it is only noise.
+   */
+  private static boolean assertsItself(List<Node> arg) {
+    return arg.size() == 2 && arg.get(0) instanceof Node.Leaf l && arg.get(1) instanceof Node.Group g && g.is("(")
+      && l.token().text().matches("(assert|expect|verify|check)([A-Z_]\\w*)?");
   }
 
   /** The chain is a whole expression statement: nothing before it but a statement start, nothing after it. */

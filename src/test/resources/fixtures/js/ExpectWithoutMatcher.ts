@@ -71,12 +71,20 @@ describe('user', () => {
     return expect(parse('{}'));
   });
 
+  it('around an assertion helper', () => {
+    expect(assertParsed(parse('{}')));
+  });
+
   it('expect in a condition', () => {
     if (expect(parse('{}'))) {
       expect(1).toBe(1);
     }
   });
 });
+
+function assertParsed(v: unknown) {
+  expect(v).toBeDefined();
+}
 
 function check(e: unknown) {
   return e;
