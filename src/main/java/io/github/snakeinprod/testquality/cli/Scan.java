@@ -17,7 +17,8 @@ import java.util.stream.Stream;
 /**
  * Runs every rule on a directory without SonarQube, for checking rules on real projects:
  * {@code java -cp target/classes io.github.snakeinprod.testquality.cli.Scan <dir>}. Prints one issue per line
- * ({@code path:line:column rule message}), then a summary per rule and the test counts. A file counts as a test file
+ * ({@code path:line:column rule message}), then a summary per rule, the test counts and the source files no test
+ * reaches. A file counts as a test file
  * by the default patterns of the plugin settings.
  */
 public final class Scan {
@@ -92,7 +93,29 @@ public final class Scan {
         System.err.println("SKIPPED " + e.getKey() + ": " + ex);
       }
     }
+    int sources = 0;
+    int untested = 0;
+    for (Map.Entry<String, String> e : languages.entrySet()) {
+      if (isTest(e.getKey(), e.getValue())) {
+        continue;
+      }
+      try {
+        Analyzer.SourceResult r = analyzer.analyzeSource(e.getKey(), e.getValue(), Files.readString(root.resolve(e.getKey()),
+          StandardCharsets.UTF_8));
+        if (r != null) {
+          sources++;
+          untested += r.reached() ? 0 : 1;
+          for (Analyzer.Issue i : r.issues()) {
+            System.out.println(i.path() + ":" + i.line() + ":" + i.column() + " " + i.rule() + " " + i.message());
+            perRule.merge(i.rule(), 1, Integer::sum);
+          }
+        }
+      } catch (IOException | RuntimeException ex) {
+        System.err.println("SKIPPED " + e.getKey() + ": " + ex);
+      }
+    }
     System.out.println("== " + testFiles + " test files, " + tests + " tests, " + failed + " skipped");
+    System.out.println("== " + sources + " source files, " + untested + " not reached by a test");
     perRule.forEach((k, v) -> System.out.println("== " + k + " " + v));
   }
 

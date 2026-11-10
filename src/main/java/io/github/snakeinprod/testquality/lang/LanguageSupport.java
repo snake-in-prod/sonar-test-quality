@@ -1,7 +1,10 @@
 package io.github.snakeinprod.testquality.lang;
 
+import io.github.snakeinprod.testquality.model.Outline;
 import io.github.snakeinprod.testquality.model.TestFile;
 import io.github.snakeinprod.testquality.parse.ParsedFile;
+import java.util.Set;
+import java.util.function.Function;
 
 /** Parsing and test extraction for one language family. One instance per analysis. */
 public interface LanguageSupport {
@@ -23,5 +26,13 @@ public interface LanguageSupport {
 
   /** Finds the tests of a parsed file. Returns {@link TestFile#EMPTY} when it has none. */
   TestFile extract(ParsedFile file);
+
+  /**
+   * The project files a parsed file imports and what it declares.
+   *
+   * @param paths every project file of this language family, relative to the base directory
+   * @param read  content of any file under the base directory (pubspec.yaml too), or null
+   */
+  Outline outline(ParsedFile file, Set<String> paths, Function<String, String> read);
 
 }

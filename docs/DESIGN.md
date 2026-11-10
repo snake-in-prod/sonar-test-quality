@@ -9,12 +9,26 @@ nothing (rules) and measures the test suite (metrics), for Python, JavaScript/Ty
 file -> LanguageSupport.parse -> ParsedFile (tokens, comments, token tree, language extras)
      -> LanguageSupport.extract -> TestFile (TestCase list)
      -> active TestRules (RuleContext) -> issues
-TestFile -> code measures (tq_*) on the file -> TqAggregator sums to directories and the project
+TestFile -> code measures (tq_*, new_tq_*) on the file -> TqAggregator sums to directories and the project
+test file -> LanguageSupport.outline -> imports resolved to project paths
+source file (second pass) -> outline -> reached? -> SourceRules -> issues, tq_source_files, tq_untested_source_files
 reports (mutation JSON, JUnit XML, Dart JSON) -> ReportSensor -> report measures
 ```
 
 `sensor/Analyzer` runs this for one file. The SonarQube sensor, the command line scanner (`cli/Scan`) and the tests
-(`RuleVerifier`) all go through it.
+(`RuleVerifier`) all go through it: `analyze` for every test file first, then `analyzeSource` for every source file.
+
+New code is per file: `new_tq_*` take the file's value when `InputFile.status()` is ADDED or CHANGED, else 0. The
+plugin API gives no new code lines, and the per file value is what a gate condition on new code can use.
+
+## Test reach
+
+`LanguageSupport.outline` gives a file's imports, resolved to project paths, and its functions and classes (top level
+and class members, no nested functions). The analyzer collects the imports of every test file; on the first source
+file it adds the imports of those imported source files (one level), and that set is "reached". Source files that a
+test reaches through two imports or more count as untested: cheap, predictable, and a test of the file in between
+rarely exercises them much. Files without a function or class, generated, configuration, migration, declaration and
+entry point files are not source files (`Analyzer.NOT_SOURCE` and a header comment check).
 
 ## Parsing
 
@@ -70,6 +84,11 @@ Each rule has a fixture, `src/test/resources/fixtures/<family>/<Key>.<py|ts|js|d
 for rules that read other project files), with `Noncompliant` comments on the lines that must get an issue
 (`Noncompliant 2` for two, `Noncompliant {{part of the message}}` to check the message), and compliant code that must
 stay silent. A test class per family calls `RuleVerifier.verify(family, key)` once per rule.
+
+A rule on source files implements `SourceRule` and runs only in the second pass, with `RuleContext.outline()` and
+`reached()`; `SourceWithoutTest` (one class, `rules/SourceWithoutTest.java`, registered in every family) is the only
+one. Its fixtures are directories with tests and sources; `RuleVerifier` checks the source files' marks too and
+returns which ones are reached.
 
 Rule quality bar: an issue must be a real defect in the test in at least 9 of 10 cases on real projects. When a
 pattern is ambiguous, stay silent. Messages say what is wrong and what to do, in one sentence.

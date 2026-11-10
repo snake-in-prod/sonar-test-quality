@@ -1,5 +1,6 @@
 package io.github.snakeinprod.testquality.rules;
 
+import io.github.snakeinprod.testquality.model.Outline;
 import io.github.snakeinprod.testquality.model.TestFile;
 import io.github.snakeinprod.testquality.parse.ParsedFile;
 import io.github.snakeinprod.testquality.parse.Token;
@@ -31,4 +32,14 @@ public interface RuleContext {
 
   /** Shared per-analysis cache for rules that index the project once. */
   <T> T shared(String key, Function<String, T> compute);
+
+  /** For a {@link SourceRule}: the source file's imports and declarations; null on test files. */
+  default Outline outline() {
+    return null;
+  }
+
+  /** For a {@link SourceRule}: a test imports this source file, or imports a source file that imports it. */
+  default boolean reached() {
+    return false;
+  }
 }

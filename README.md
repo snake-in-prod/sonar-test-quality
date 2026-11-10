@@ -5,9 +5,10 @@ Finds tests that pass while they check nothing, and measures how good a test sui
 
 - **38 rules** on test files: an assert that is always true, a mock assertion with a typo, a test that never runs, an
   async assertion nobody awaits, a widget expectation before the frame was pumped.
+- **Production code checks**: which source files no test imports (test reach), as metrics and as an optional rule.
 - **Test quality metrics**: tests, assertions per test, tests without assertions, mocks, mock-heavy and skipped tests,
-  and from reports the mutation score, the slowest tests (p95) and flaky tests.
-- **A Test Quality page** per project, and every metric is usable in quality gates.
+  and from reports the mutation score, the slowest tests (p95) and flaky tests; new code variants for quality gates.
+- **A Test Quality page** per project, and a ready-made "Test Quality" quality gate (installed by a script).
 
 The built-in Python and JavaScript analyzers' own test rules (an assert on a tuple, exclusive tests, tests without
 assertions) are not repeated. SonarQube has no Dart analyzer; this plugin brings a `dart` language for test files.
@@ -83,14 +84,24 @@ some code bases; activate them in your own profile.
 | `RealDelayInTest` | Widget tests should not wait for real time | Minor | no |
 | `SkipWithoutReason` | Skipped tests should say why | Minor | no |
 
+### Source files (all three languages)
+
+| Rule | Name | Severity | Active by default |
+| --- | --- | --- | --- |
+| `SourceWithoutTest` | Source files should be exercised by at least one test | Minor | no |
+
+A policy rule in each repository (`testquality-python`, `testquality-js`, `testquality-ts`, `testquality-dart`): an
+issue on the first function of a source file that defines at least 3 functions or methods and that no test reaches
+(see Test reach below). Activate it in your profile when every module should have tests.
+
 Every rule was run on public projects before release (psf/requests, pallets/flask, encode/httpx, pallets/click,
 pytest-dev/pytest-mock, vercel/swr, pmndrs/zustand, testing-library/react-testing-library, felangel/bloc,
 rrousselGit/riverpod, flutter/samples): 41 issues, all of them real test defects after the fixes made during the review.
 
 ## Metrics
 
-Raw values, prefix `tq_`, saved on test files (code metrics) or on the source files that were mutated (mutation
-metrics) and summed up to directories and the project.
+Raw values, prefix `tq_` (`new_tq_` on new code), saved on test files (code metrics), on source files (test reach) or
+on the source files that were mutated (mutation metrics), and summed up to directories and the project.
 
 | Metric | Source | Meaning |
 | --- | --- | --- |
@@ -107,6 +118,41 @@ metrics) and summed up to directories and the project.
 | `tq_test_duration_p95` | JUnit XML, Dart JSON | 95th percentile of test time, ms |
 | `tq_slowest_tests` | JUnit XML, Dart JSON | JSON list of the 10 slowest tests |
 | `tq_flaky_tests` | several reports | tests that both passed and failed across the reports of one analysis |
+| `tq_source_files` | imports | source files with at least one function or class (see Test reach) |
+| `tq_untested_source_files` | imports | source files no test reaches |
+| `tq_test_reach` | imports | (source files - untested) / source files, in %, on directories and the project |
+| `new_tq_tests`, `new_tq_tests_without_assertion`, `new_tq_correctness_issues` | code, rules | the same on new code |
+| `new_tq_untested_source_files` | imports | untested source files on new code |
+
+### New code
+
+SonarQube does not show plugins the new code period line by line, so new code is counted **per file**: a file is new
+code when SonarQube marks it added or changed (against the previous analysis, or against the reference branch in a
+branch or pull request analysis). A new or changed file counts whole: a test file that gets one new test brings all
+its tests, tests without assertion and correctness issues into the `new_tq_*` measures. Unchanged files count 0. The
+first analysis of a project marks every file as added.
+
+### Test reach
+
+Python, JavaScript / TypeScript and Dart tests reach the code under test through imports, so the plugin reads the
+imports of every test file and resolves them to project files. A source file is **reached** when a test imports it,
+or imports a source file that imports it (one level, to stay cheap and predictable). This is not coverage: an
+imported function may still be untested, and code reached only through a framework (routes, plugins, dependency
+injection) shows as untested.
+
+- Python: `import a.b`, `from a.b import c`, relative imports, and packages (`a/b/__init__.py`); absolute imports are
+  looked up from each directory above the test file and its `src/`, so src layouts and nested projects resolve.
+- JavaScript / TypeScript: `import ... from`, `export ... from`, `require()` and `import()` of paths starting with
+  `.` or `/`, with or without extension (`.js`, `.jsx`, `.ts`, `.tsx`, `.mjs`, `.cjs`, `.mts`, `.cts`), `index`
+  files, and `./x.js` written for `x.ts`. Aliases (tsconfig paths, webpack aliases) are not resolved.
+- Dart: relative imports, `export` and `part`, and `package:<name>/x.dart` as `lib/x.dart` of the project package
+  whose `pubspec.yaml` has that name.
+
+Not counted as source files: files under the test patterns, files without a function or class (an empty
+`__init__.py`, an `index` file that only re-exports), generated files (`*_pb2.py`, `*.g.dart`, `*.freezed.dart`, a
+"generated" / "do not edit" header comment), declarations (`*.d.ts`), configuration (`*.config.js`, dot files,
+`setup.py`, `settings.py`, `conftest.py`), migrations, entry points (`main.dart`, `__main__.py`, `manage.py`), and
+`build`, `dist`, `coverage`, `node_modules` directories.
 
 ## Reports
 
@@ -132,19 +178,33 @@ and skipped.
 
 ## Quality gate
 
-Suggested conditions (not installed automatically):
+The plugin API cannot create quality gates, so a script installs the "Test Quality" gate:
 
-| Condition | On new code | On overall code |
-| --- | --- | --- |
-| Test correctness issues (`tq_correctness_issues`) | 0 | |
-| Tests without assertion (`tq_tests_without_assertion`) | 0 | |
-| Mutation score (`tq_mutation_score`) | | at least your baseline, e.g. 60 % |
-| Flaky tests (`tq_flaky_tests`) | 0 | |
+```bash
+SONAR_HOST_URL=https://sonar.example.org SONAR_TOKEN=<token> scripts/create-test-quality-gate.sh [--with-sonar-way]
+```
+
+The token needs the *Administer Quality Gates* permission. The script needs bash and curl, creates the gate or updates
+its conditions, and can run again at any time; conditions on other metrics that you added are kept. With
+`--with-sonar-way` it also copies the conditions of "Sonar way" (new issues, coverage, duplications, hotspots);
+recent SonarQube versions already put those into every new gate. Then select the gate for a project in *Project
+Settings > Quality Gate*, or make it the default on the *Quality Gates* page.
+
+| Condition | Fails when |
+| --- | --- |
+| Test correctness issues on new code (`new_tq_correctness_issues`) | greater than 0 |
+| Tests without assertion on new code (`new_tq_tests_without_assertion`) | greater than 0 |
+| Untested source files on new code (`new_tq_untested_source_files`) | greater than 0 |
+| Mutation score, overall (`tq_mutation_score`) | less than 60 % |
+| Flaky tests (`tq_flaky_tests`) | greater than 0 |
+
+Projects without a mutation or test report have no `tq_mutation_score` or `tq_flaky_tests`, and a condition without
+a value does not fail.
 
 ## Without SonarQube
 
 `java -cp target/classes:<gson jar> io.github.snakeinprod.testquality.cli.Scan <dir>` runs every rule on a directory and
-prints the issues, a count per rule and the number of tests found.
+prints the issues, a count per rule, the number of tests found and the source files no test reaches.
 
 ## Build
 

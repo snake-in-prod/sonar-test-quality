@@ -1,18 +1,23 @@
 package io.github.snakeinprod.testquality.lang.python;
 
 import io.github.snakeinprod.testquality.lang.LanguageSupport;
+import io.github.snakeinprod.testquality.model.Outline;
 import io.github.snakeinprod.testquality.model.TestCase;
 import io.github.snakeinprod.testquality.model.TestFile;
 import io.github.snakeinprod.testquality.parse.Chain;
 import io.github.snakeinprod.testquality.parse.Chains;
 import io.github.snakeinprod.testquality.parse.Lexed;
+import io.github.snakeinprod.testquality.parse.Node;
 import io.github.snakeinprod.testquality.parse.Nodes;
 import io.github.snakeinprod.testquality.parse.ParsedFile;
+import io.github.snakeinprod.testquality.parse.Token;
 import io.github.snakeinprod.testquality.parse.TokenKind;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.TreeSet;
+import java.util.function.Function;
 import java.util.regex.Pattern;
 
 /**
@@ -60,6 +65,84 @@ public class PythonSupport implements LanguageSupport {
       }
     }
     return out.isEmpty() ? TestFile.EMPTY : new TestFile(List.copyOf(out));
+  }
+
+  /**
+   * An import resolves to the longest dotted prefix that is a project module ({@code a/b.py}) or package
+   * ({@code a/b/__init__.py}): a relative one from the file's package, an absolute one from each directory above the
+   * file (deepest first, as pytest puts the test directory on sys.path) and that directory's {@code src/}.
+   */
+  @Override
+  public Outline outline(ParsedFile file, Set<String> paths, Function<String, String> read) {
+    PyModule m = file.get(PyModule.class);
+    List<String> dotted = new ArrayList<>(m.imports().values());
+    for (PyStatement s : m.walk()) {
+      // from a.b import * leaves no name in imports
+      List<Node> n = s.nodes();
+      if (s.keyword().equals("from") && n.size() > 3 && Nodes.isLeaf(n.get(n.size() - 1), "*")) {
+        dotted.add(Nodes.tokens(n.subList(1, n.size() - 2)).stream().map(Token::text).reduce("", String::concat));
+      }
+    }
+    Set<String> imports = new TreeSet<>();
+    for (String d : dotted) {
+      String p = module(d, file.path(), paths);
+      if (p != null && !p.equals(file.path())) {
+        imports.add(p);
+      }
+    }
+    List<Token> functions = new ArrayList<>();
+    List<Token> classes = new ArrayList<>();
+    declarations(m.statements(), functions, classes);
+    return new Outline(imports, functions, classes);
+  }
+
+  private static void declarations(List<PyStatement> body, List<Token> functions, List<Token> classes) {
+    for (PyStatement s : body) {
+      if (s.nameToken() != null && s.keyword().equals("def")) {
+        functions.add(s.nameToken());
+      } else if (s.nameToken() != null && s.keyword().equals("class")) {
+        classes.add(s.nameToken());
+        declarations(s.body(), functions, classes);
+      }
+    }
+  }
+
+  private static String module(String dotted, String from, Set<String> paths) {
+    int dots = 0;
+    while (dots < dotted.length() && dotted.charAt(dots) == '.') {
+      dots++;
+    }
+    List<String> roots = new ArrayList<>();
+    if (dots > 0) {
+      String base = Outline.join(Outline.dir(from), "../".repeat(dots - 1));
+      if (base == null) {
+        return null;
+      }
+      roots.add(base.isEmpty() ? "" : base + "/");
+    } else {
+      for (String d = Outline.dir(from); ; d = Outline.dir(d.substring(0, d.length() - 1))) {
+        roots.add(d);
+        roots.add(d + "src/");
+        if (d.isEmpty()) {
+          break;
+        }
+      }
+    }
+    String name = dotted.substring(dots);
+    while (true) {
+      String rel = name.replace('.', '/');
+      for (String root : roots) {
+        for (String c : name.isEmpty() ? List.of(root + "__init__.py") : List.of(root + rel + ".py", root + rel + "/__init__.py")) {
+          if (paths.contains(c)) {
+            return c;
+          }
+        }
+      }
+      if (name.isEmpty() || dots == 0 && !name.contains(".")) {
+        return null;
+      }
+      name = name.contains(".") ? name.substring(0, name.lastIndexOf('.')) : "";
+    }
   }
 
   private void testClass(PyModule m, PyStatement cls, String outer, boolean outerSkip, List<PyStatement> outerDecorators,

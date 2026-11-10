@@ -22,18 +22,20 @@ public class TqRulesDefinition implements RulesDefinition {
     NewRepository repo = context.createRepository(RuleCatalog.repository(language), language).setName("Test Quality");
     List<RuleCatalog.Spec> specs = RuleCatalog.family(family);
     for (RuleCatalog.Spec spec : specs) {
+      // a source file rule is about missing tests, not about a defect in one
+      boolean source = spec.factory().get() instanceof SourceRule;
       repo.createRule(spec.key())
         .setName(spec.name())
         .setHtmlDescription(spec.html())
-        .setType(RuleType.BUG)
+        .setType(source ? RuleType.CODE_SMELL : RuleType.BUG)
         .setSeverity(spec.severity())
         .setTags("tests", "test-quality")
-        .addDefaultImpact(SoftwareQuality.RELIABILITY, switch (spec.severity()) {
+        .addDefaultImpact(source ? SoftwareQuality.MAINTAINABILITY : SoftwareQuality.RELIABILITY, switch (spec.severity()) {
           case "CRITICAL" -> Severity.HIGH;
           case "MINOR" -> Severity.LOW;
           default -> Severity.MEDIUM;
         })
-        .setCleanCodeAttribute(CleanCodeAttribute.LOGICAL);
+        .setCleanCodeAttribute(source ? CleanCodeAttribute.TESTED : CleanCodeAttribute.LOGICAL);
     }
     repo.done();
   }

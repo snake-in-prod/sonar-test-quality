@@ -39,20 +39,48 @@ public class TqMetrics implements Metrics {
   public static final Metric<Integer> FLAKY_TESTS = intMetric("tq_flaky_tests", "Flaky tests",
     "Tests that both passed and failed across the reports of one analysis");
 
+  // New code: a file is new code when SonarQube marks it ADDED or CHANGED (against the previous analysis, or the
+  // reference branch of a branch or pull request analysis); then it counts whole, else 0.
+  public static final Metric<Integer> NEW_TESTS = newMetric("new_tq_tests", "Tests found on new code",
+    "Tests in test files added or changed", Metric.DIRECTION_BETTER);
+  public static final Metric<Integer> NEW_TESTS_WITHOUT_ASSERTION = newMetric("new_tq_tests_without_assertion",
+    "Tests without assertion on new code", "Tests with no assertion in test files added or changed", Metric.DIRECTION_WORST);
+  public static final Metric<Integer> NEW_CORRECTNESS_ISSUES = newMetric("new_tq_correctness_issues",
+    "Test correctness issues on new code", "Issues of the Test Quality rules in test files added or changed", Metric.DIRECTION_WORST);
+
+  public static final Metric<Integer> SOURCE_FILES = intMetric("tq_source_files", "Source files",
+    "Source files with a function or class, for the test reach");
+  public static final Metric<Integer> UNTESTED_SOURCE_FILES = new Metric.Builder("tq_untested_source_files", "Untested source files",
+    Metric.ValueType.INT).setDescription("Source files no test imports, directly or through one source file").setDomain(DOMAIN)
+    .setDirection(Metric.DIRECTION_WORST).setQualitative(true).setBestValue(0.0).create();
+  public static final Metric<Integer> NEW_UNTESTED_SOURCE_FILES = newMetric("new_tq_untested_source_files",
+    "Untested source files on new code", "Source files added or changed that no test imports", Metric.DIRECTION_WORST);
+  public static final Metric<Double> TEST_REACH = new Metric.Builder("tq_test_reach", "Test reach", Metric.ValueType.PERCENT)
+    .setDescription("Source files a test imports, directly or through one source file, in %").setDomain(DOMAIN)
+    .setDirection(Metric.DIRECTION_BETTER).setQualitative(true).setBestValue(100.0).setWorstValue(0.0).create();
+
   private static Metric<Integer> intMetric(String key, String name, String description) {
     return new Metric.Builder(key, name, Metric.ValueType.INT).setDescription(description).setDomain(DOMAIN)
       .setDirection(Metric.DIRECTION_WORST).setQualitative(false).create();
   }
 
+  private static Metric<Integer> newMetric(String key, String name, String description, int direction) {
+    Metric.Builder b = new Metric.Builder(key, name, Metric.ValueType.INT).setDescription(description).setDomain(DOMAIN)
+      .setDirection(direction).setQualitative(direction == Metric.DIRECTION_WORST);
+    return (direction == Metric.DIRECTION_WORST ? b.setBestValue(0.0) : b).create();
+  }
+
   /** Integer measures summed from files up. */
   public static final List<Metric<Integer>> SUMMED = List.of(TESTS, ASSERTIONS, TESTS_WITHOUT_ASSERTION, MOCKS, MOCK_HEAVY_TESTS,
-    SKIPPED_TESTS, CORRECTNESS_ISSUES, MUTANTS, MUTANTS_KILLED, MUTANTS_SURVIVED, MUTANTS_NO_COVERAGE, MUTANTS_TIMEOUT);
+    SKIPPED_TESTS, CORRECTNESS_ISSUES, MUTANTS, MUTANTS_KILLED, MUTANTS_SURVIVED, MUTANTS_NO_COVERAGE, MUTANTS_TIMEOUT,
+    NEW_TESTS, NEW_TESTS_WITHOUT_ASSERTION, NEW_CORRECTNESS_ISSUES, SOURCE_FILES, UNTESTED_SOURCE_FILES, NEW_UNTESTED_SOURCE_FILES);
 
   @Override
   @SuppressWarnings("rawtypes")
   public List<Metric> getMetrics() {
     return List.of(TESTS, ASSERTIONS, TESTS_WITHOUT_ASSERTION, ASSERTIONS_PER_TEST, MOCKS, MOCK_HEAVY_TESTS, SKIPPED_TESTS,
       CORRECTNESS_ISSUES, MUTANTS, MUTANTS_KILLED, MUTANTS_SURVIVED, MUTANTS_NO_COVERAGE, MUTANTS_TIMEOUT, MUTATION_SCORE,
-      TEST_DURATION_P95, SLOWEST_TESTS, FLAKY_TESTS);
+      TEST_DURATION_P95, SLOWEST_TESTS, FLAKY_TESTS, NEW_TESTS, NEW_TESTS_WITHOUT_ASSERTION, NEW_CORRECTNESS_ISSUES, SOURCE_FILES,
+      UNTESTED_SOURCE_FILES, NEW_UNTESTED_SOURCE_FILES, TEST_REACH);
   }
 }

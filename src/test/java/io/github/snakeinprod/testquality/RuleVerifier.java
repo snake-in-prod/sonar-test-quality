@@ -24,8 +24,9 @@ import java.util.stream.Stream;
 /**
  * Checks one rule against a fixture. A fixture is {@code src/test/resources/fixtures/<family>/<Key>.<ext>} or a directory
  * {@code fixtures/<family>/<Key>/} holding several files (its test files are checked, the others are project files the
- * rule may read). Every line with a comment containing {@code Noncompliant} must get exactly one issue (or N with
- * {@code Noncompliant N}); {@code {{text}}} after it must be part of the message. No other line may get an issue.
+ * rule may read, and after the test files its source files go through the source rules' pass). Every line with a
+ * comment containing {@code Noncompliant} must get exactly one issue (or N with {@code Noncompliant N});
+ * {@code {{text}}} after it must be part of the message. No other line may get an issue.
  */
 public final class RuleVerifier {
 
@@ -34,7 +35,8 @@ public final class RuleVerifier {
   private RuleVerifier() {
   }
 
-  public static void verify(String family, String key) {
+  /** Returns, for a directory fixture, whether a test reaches each file counted as a source file. */
+  public static Map<String, Boolean> verify(String family, String key) {
     assertThat(RuleCatalog.family(family)).extracting(RuleCatalog.Spec::key).contains(key);
     Path base = Path.of("src/test/resources/fixtures", family);
     Path dir = base.resolve(key);
@@ -74,7 +76,7 @@ public final class RuleVerifier {
 
         @Override
         public String read(String path) {
-          return languages.containsKey(path) ? content(root.resolve(path)) : null;
+          return Files.isRegularFile(root.resolve(path)) ? content(root.resolve(path)) : null;
         }
 
         @Override
@@ -91,35 +93,55 @@ public final class RuleVerifier {
       }
       checked++;
       Analyzer.Result r = analyzer.analyze(e.getKey(), e.getValue(), content(root.resolve(e.getKey())));
-      Map<Integer, Integer> expected = new TreeMap<>();
-      Map<Integer, String> messages = new TreeMap<>();
-      for (Token c : r.file().comments()) {
-        Matcher m = MARK.matcher(c.text());
-        if (m.find()) {
-          expected.merge(c.line(), m.group(1) == null ? 1 : Integer.parseInt(m.group(1)), Integer::sum);
-          if (m.group(2) != null) {
-            messages.put(c.line(), m.group(2));
-          }
-        }
+      compare(e.getKey(), r.file().comments(), r.issues(), problems);
+    }
+    // source files of a directory fixture, after every test file: the source rules' pass
+    Map<String, Boolean> reach = new TreeMap<>();
+    for (Map.Entry<String, String> e : Files.isDirectory(dir) ? languages.entrySet() : Set.<Map.Entry<String, String>>of()) {
+      if (Scan.isTest(e.getKey(), e.getValue())) {
+        continue;
       }
-      Map<Integer, List<String>> actual = new TreeMap<>();
-      for (Analyzer.Issue i : r.issues()) {
-        actual.computeIfAbsent(i.line(), l -> new ArrayList<>()).add(i.message());
-      }
-      Set<Integer> lines = new TreeSet<>(expected.keySet());
-      lines.addAll(actual.keySet());
-      for (int line : lines) {
-        int want = expected.getOrDefault(line, 0);
-        List<String> got = actual.getOrDefault(line, List.of());
-        if (want != got.size()) {
-          problems.add(e.getKey() + ":" + line + " expected " + want + " issue(s), got " + got.size() + " " + got);
-        } else if (messages.containsKey(line) && got.stream().noneMatch(g -> g.contains(messages.get(line)))) {
-          problems.add(e.getKey() + ":" + line + " message should contain \"" + messages.get(line) + "\", got " + got);
-        }
+      String source = content(root.resolve(e.getKey()));
+      Analyzer.SourceResult r = analyzer.analyzeSource(e.getKey(), e.getValue(), source);
+      if (r != null) {
+        reach.put(e.getKey(), r.reached());
+        compare(e.getKey(), r.file().comments(), r.issues(), problems);
+      } else if (MARK.matcher(source).find()) {
+        problems.add(e.getKey() + " is not counted as a source file but has a Noncompliant mark");
       }
     }
     assertThat(checked).as("test files checked for " + family + "/" + key).isPositive();
     assertThat(problems).as(family + "/" + key).isEmpty();
+    return reach;
+  }
+
+  private static void compare(String path, List<Token> comments, List<Analyzer.Issue> issues, List<String> problems) {
+    Map<Integer, Integer> expected = new TreeMap<>();
+    Map<Integer, String> messages = new TreeMap<>();
+    for (Token c : comments) {
+      Matcher m = MARK.matcher(c.text());
+      if (m.find()) {
+        expected.merge(c.line(), m.group(1) == null ? 1 : Integer.parseInt(m.group(1)), Integer::sum);
+        if (m.group(2) != null) {
+          messages.put(c.line(), m.group(2));
+        }
+      }
+    }
+    Map<Integer, List<String>> actual = new TreeMap<>();
+    for (Analyzer.Issue i : issues) {
+      actual.computeIfAbsent(i.line(), l -> new ArrayList<>()).add(i.message());
+    }
+    Set<Integer> lines = new TreeSet<>(expected.keySet());
+    lines.addAll(actual.keySet());
+    for (int line : lines) {
+      int want = expected.getOrDefault(line, 0);
+      List<String> got = actual.getOrDefault(line, List.of());
+      if (want != got.size()) {
+        problems.add(path + ":" + line + " expected " + want + " issue(s), got " + got.size() + " " + got);
+      } else if (messages.containsKey(line) && got.stream().noneMatch(g -> g.contains(messages.get(line)))) {
+        problems.add(path + ":" + line + " message should contain \"" + messages.get(line) + "\", got " + got);
+      }
+    }
   }
 
   private static List<Path> walk(Path dir) {

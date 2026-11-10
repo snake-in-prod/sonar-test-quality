@@ -152,7 +152,18 @@ public final class RuleCatalog {
       "await Future.delayed(Duration(seconds: 1)); // Noncompliant", io.github.snakeinprod.testquality.rules.dart.RealDelayInTest::new),
     spec("dart", "SkipWithoutReason", "MINOR", false, "Skipped tests should say why",
       "skip: true without a reason string.",
-      "test('x', () {}, skip: true); // Noncompliant", io.github.snakeinprod.testquality.rules.dart.SkipWithoutReason::new));
+      "test('x', () {}, skip: true); // Noncompliant", io.github.snakeinprod.testquality.rules.dart.SkipWithoutReason::new),
+    sourceWithoutTest("python", "# src/shop/tax.py, no test imports shop.tax or a module that imports it\ndef rate(): ...  # Noncompliant\ndef vat(): ...\ndef net(): ..."),
+    sourceWithoutTest("js", "// src/tax.ts, no test imports './tax' or a file that imports it\nexport function rate() {} // Noncompliant\nexport function vat() {}\nexport const net = () => 0;"),
+    sourceWithoutTest("dart", "// lib/tax.dart, no test imports package:shop/tax.dart or a library that imports it\ndouble rate() => 0.2; // Noncompliant\ndouble vat() => 0.2;\ndouble net() => 0.8;"));
+
+  /** The source file rule, one per family: a policy, so not active by default. */
+  private static Spec sourceWithoutTest(String family, String example) {
+    return spec(family, "SourceWithoutTest", "MINOR", false, "Source files should be exercised by at least one test",
+      "A source file defining at least 3 functions or methods that no test imports, neither directly nor through a source "
+        + "file a test imports. Tests reach code through imports, so no test exercises this file. Generated, configuration and "
+        + "migration files and entry points are left out.", example, SourceWithoutTest::new);
+  }
 
   public static List<Spec> family(String family) {
     return ALL.stream().filter(s -> s.family().equals(family)).toList();

@@ -15,7 +15,8 @@ public class TqAggregator implements MeasureComputer {
   public MeasureComputerDefinition define(MeasureComputerDefinitionContext def) {
     String[] summed = TqMetrics.SUMMED.stream().map(Metric::getKey).toArray(String[]::new);
     String[] outputs = java.util.stream.Stream.concat(java.util.Arrays.stream(summed),
-      java.util.stream.Stream.of(TqMetrics.ASSERTIONS_PER_TEST.getKey(), TqMetrics.MUTATION_SCORE.getKey())).toArray(String[]::new);
+      java.util.stream.Stream.of(TqMetrics.ASSERTIONS_PER_TEST.getKey(), TqMetrics.MUTATION_SCORE.getKey(), TqMetrics.TEST_REACH.getKey()))
+      .toArray(String[]::new);
     return def.newDefinitionBuilder().setOutputMetrics(outputs).build();
   }
 
@@ -32,6 +33,12 @@ public class TqAggregator implements MeasureComputer {
         if (any && ctx.getMeasure(m.getKey()) == null) {
           ctx.addMeasure(m.getKey(), sum);
         }
+      }
+      Integer sources = value(ctx, TqMetrics.SOURCE_FILES.getKey());
+      Integer untested = value(ctx, TqMetrics.UNTESTED_SOURCE_FILES.getKey());
+      if (sources != null && sources > 0 && ctx.getMeasure(TqMetrics.TEST_REACH.getKey()) == null) {
+        int u = untested == null ? 0 : untested;
+        ctx.addMeasure(TqMetrics.TEST_REACH.getKey(), Math.round(1000.0 * (sources - u) / sources) / 10.0);
       }
     }
     Integer tests = value(ctx, TqMetrics.TESTS.getKey());

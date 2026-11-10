@@ -1,6 +1,7 @@
 package io.github.snakeinprod.testquality.lang.js;
 
 import io.github.snakeinprod.testquality.lang.LanguageSupport;
+import io.github.snakeinprod.testquality.model.Outline;
 import io.github.snakeinprod.testquality.model.TestCase;
 import io.github.snakeinprod.testquality.model.TestFile;
 import io.github.snakeinprod.testquality.parse.Chain;
@@ -16,6 +17,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
+import java.util.function.Function;
 
 /**
  * Parsing and test extraction for JavaScript and TypeScript (JSX / TSX included): Jest, Vitest, Mocha, Jasmine and
@@ -54,6 +57,119 @@ public class JsSupport implements LanguageSupport {
     List<TestCase> out = new ArrayList<>();
     visit(file.root(), "", false, out);
     return out.isEmpty() ? TestFile.EMPTY : new TestFile(List.copyOf(out));
+  }
+
+  /**
+   * {@code import ... from 'x'}, {@code import 'x'}, {@code export ... from 'x'}, {@code require('x')} and
+   * {@code import('x')} of paths starting with "." or "/" (the base directory); aliases such as tsconfig paths are not
+   * resolved. A path resolves as written, with a JS or TS extension, as a directory index, or from ".js" to the ".ts"
+   * source.
+   */
+  @Override
+  public Outline outline(ParsedFile file, Set<String> paths, Function<String, String> read) {
+    Set<String> imports = new TreeSet<>();
+    List<Token> t = file.tokens();
+    for (int i = 1; i < t.size(); i++) {
+      Token p = t.get(i - 1);
+      if (t.get(i).kind() == TokenKind.STRING && (p.isIdent("from") || p.isIdent("import")
+        || p.is("(") && i > 1 && (t.get(i - 2).isIdent("require") || t.get(i - 2).isIdent("import")))) {
+        String r = resolve(file.path(), unquote(t.get(i).text()), paths);
+        if (r != null && !r.equals(file.path())) {
+          imports.add(r);
+        }
+      }
+    }
+    List<Token> functions = new ArrayList<>();
+    List<Token> classes = new ArrayList<>();
+    declarations(file.root(), false, functions, classes);
+    return new Outline(imports, functions, classes);
+  }
+
+  private static String resolve(String from, String spec, Set<String> paths) {
+    if (!spec.startsWith(".") && !spec.startsWith("/")) {
+      return null;
+    }
+    String base = Outline.join(spec.startsWith("/") ? "" : Outline.dir(from), spec);
+    if (base == null) {
+      return null;
+    }
+    List<String> candidates = new ArrayList<>(List.of(base));
+    for (String ext : EXTENSIONS) {
+      candidates.add(base + ext);
+    }
+    for (String ext : EXTENSIONS) {
+      candidates.add(base + "/index" + ext);
+    }
+    if (base.matches(".*\\.[cm]?jsx?")) {
+      String stem = base.substring(0, base.lastIndexOf('.'));
+      candidates.addAll(List.of(stem + ".ts", stem + ".tsx", stem + ".mts", stem + ".cts"));
+    }
+    return candidates.stream().filter(paths::contains).findFirst().orElse(null);
+  }
+
+  private static final List<String> EXTENSIONS = List.of(".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts");
+
+  /**
+   * Functions at the top level and in class bodies: {@code function f}, {@code x = () => ...} / {@code x = function},
+   * methods {@code m(...) {...}}. Function literals passed as arguments do not count.
+   */
+  private static void declarations(Node.Group g, boolean classBody, List<Token> functions, List<Token> classes) {
+    List<Node> kids = g.children();
+    for (int i = 0; i < kids.size(); i++) {
+      Node n = kids.get(i);
+      Token t = Nodes.leaf(n);
+      if (t == null) {
+        continue;
+      }
+      if (t.isIdent("class")) {
+        int j = i + 1;
+        while (j < kids.size() && !(kids.get(j) instanceof Node.Group b && b.is("{"))) {
+          j++;
+        }
+        if (j < kids.size()) {
+          Token name = Nodes.leaf(kids.get(i + 1));
+          classes.add(name != null && name.kind() == TokenKind.IDENT ? name : t);
+          declarations((Node.Group) kids.get(j), true, functions, classes);
+          i = j;
+        }
+      } else if (t.isIdent("function") || t.isIdent("async") && i + 1 < kids.size() && Nodes.isIdent(kids.get(i + 1), "function")) {
+        JsTrees.Fn f = JsTrees.functionAt(g, i);
+        if (f != null) {
+          Token name = Nodes.leaf(kids.get(t.isIdent("async") ? i + 2 : i + 1));
+          functions.add(name != null && name.kind() == TokenKind.IDENT ? name : t);
+          i = f.end() - 1;
+        }
+      } else if (t.is("=") && i + 1 < kids.size() && !typeAlias(kids, i)) {
+        JsTrees.Fn f = JsTrees.functionAt(g, i + 1);
+        if (f != null) {
+          Token name = i > 0 ? Nodes.leaf(kids.get(i - 1)) : null;
+          functions.add(name != null ? name : t);
+          i = f.end() - 1;
+        }
+      } else if (classBody && t.kind() == TokenKind.IDENT && i + 1 < kids.size() && kids.get(i + 1) instanceof Node.Group p
+        && p.is("(")) {
+        // a method: name(...) then a TypeScript return type, then the body
+        int k = i + 2;
+        while (k < kids.size() && kids.get(k) instanceof Node.Leaf l && !l.token().is(";") && !l.token().is("=")
+          && !l.token().is(",") && !l.token().is("=>")) {
+          k++;
+        }
+        if (k < kids.size() && kids.get(k) instanceof Node.Group b && b.is("{")) {
+          functions.add(t);
+          i = k;
+        }
+      }
+    }
+  }
+
+  /** The "=" of {@code type F = (x: number) => void}. */
+  private static boolean typeAlias(List<Node> kids, int eq) {
+    for (int k = eq - 2; k >= 0 && k >= eq - 8 && kids.get(k) instanceof Node.Leaf l && !l.token().is(";"); k--) {
+      if (l.token().isIdent("type") && (k == 0 || !Nodes.isLeaf(kids.get(k - 1), "."))) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private void visit(Node.Group g, String suite, boolean skipped, List<TestCase> out) {
