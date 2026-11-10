@@ -1,0 +1,13 @@
+<p>An expectation that cannot fail checks nothing: <code>anything</code> or <code>isA&lt;dynamic&gt;()</code> match
+every value, a <code>find.*</code> finder or a constructor call is never null, a constant checked against itself
+(<code>expect(true, isTrue)</code>) and a value compared with itself always pass.</p>
+<h2>Noncompliant code example</h2>
+<pre>
+expect(find.byKey(const Key('save')), isNotNull); // Noncompliant
+expect(parse('1'), anything); // Noncompliant
+</pre>
+<h2>Compliant solution</h2>
+<pre>
+expect(find.byKey(const Key('save')), findsOneWidget);
+expect(parse('1'), 1);
+</pre>

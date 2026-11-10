@@ -1,0 +1,18 @@
+<p><code>expectLater</code> returns a future that completes when the matcher has checked the value. Called as a
+statement without <code>await</code>, the test goes on (and may end) before the check runs, and a failure shows up late,
+in another test, or not at all.</p>
+<h2>Noncompliant code example</h2>
+<pre>
+test('emits the value', () {
+  expectLater(controller.stream, emits(1)); // Noncompliant
+  controller.add(1);
+});
+</pre>
+<h2>Compliant solution</h2>
+<pre>
+test('emits the value', () async {
+  final check = expectLater(controller.stream, emits(1));
+  controller.add(1);
+  await check;
+});
+</pre>
