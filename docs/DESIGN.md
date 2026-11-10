@@ -51,7 +51,9 @@ language finds:
   `test(...)` and `test.describe`, inside `describe` / `suite` / `context` blocks for `suite`. `body` is the callback's
   `{}` group (or the arrow expression group).
 - Dart: `test(...)`, `testWidgets(...)`, `testGoldens`, inside `group(...)`; `skip:` named argument. `body` is the
-  closure's `{}` group.
+  closure's `{}` group. In files importing package:bloc_test, `blocTest<B, S>('description', build: ..., act: ...,
+  expect: ..., verify: ...)` too: `body` is the call's `()` argument group, its `skip:` (a count of states) is not a
+  skip, and `expect:` and `errors:` count one assertion each.
 
 `assertions` counts: Python `assert` statements, `self.assert*` / `self.fail`, `pytest.raises` / `pytest.warns` blocks,
 mock `assert_*` calls; JS `expect(...).<matcher>(...)` chains (a matcher call, `.not`, `.resolves` etc. included),

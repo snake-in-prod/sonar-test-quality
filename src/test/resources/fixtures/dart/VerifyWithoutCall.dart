@@ -1,3 +1,4 @@
+import 'package:bloc_test/bloc_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:test/test.dart';
@@ -96,4 +97,22 @@ void main() {
   test('closure with parameter', () {
     when((x) => repo.save);
   });
+
+  blocTest<UserBloc, UserState>(
+    'saves the user',
+    build: () => UserBloc(repo),
+    act: (bloc) => bloc.add(Save(user)),
+    expect: () => [isA<Saved>()],
+    verify: (_) {
+      verify(() => repo.save); // Noncompliant
+      verify(() => repo.save(user)).called(1);
+      verify(repo.delete(user));
+    },
+  );
+
+  blocTest<UserBloc, UserState>(
+    'arrow verify',
+    build: () => UserBloc(repo),
+    verify: (_) => verify(repo.save), // Noncompliant
+  );
 }

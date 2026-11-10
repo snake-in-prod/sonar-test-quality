@@ -1,3 +1,4 @@
+import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
@@ -89,4 +90,33 @@ void main() {
     final repo = FakeRepo();
     expect(Service(repo).current(), isNull);
   });
+
+  blocTest<UserBloc, UserState>(
+    'stub in build on a mock nobody uses',
+    build: () {
+      final repo = MockRepo();
+      when(() => repo.load()).thenReturn(user); // Noncompliant
+      return UserBloc(shared);
+    },
+    expect: () => [isA<Loaded>()],
+  );
+
+  blocTest<UserBloc, UserState>(
+    'stub in build on the injected mock',
+    build: () {
+      final repo = MockRepo();
+      when(() => repo.load()).thenReturn(user);
+      return UserBloc(repo);
+    },
+    expect: () => [isA<Loaded>()],
+  );
+
+  blocTest<UserBloc, UserState>(
+    'stub on the shared mock',
+    setUp: () => when(() => shared.load()).thenReturn(user),
+    build: () => UserBloc(shared),
+    act: (bloc) => bloc.add(Load()),
+    expect: () => [isA<Loaded>()],
+    verify: (_) => verify(() => shared.load()).called(1),
+  );
 }

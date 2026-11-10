@@ -1,3 +1,4 @@
+import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -87,4 +88,15 @@ void main() {
     check(x, anything);
     matcher.expect(x, anything);
   });
+
+  blocTest<CounterBloc, int>(
+    'states and verify',
+    build: () => CounterBloc(),
+    act: (bloc) => bloc.add(Increment()),
+    expect: () => [1, anything],
+    verify: (bloc) {
+      expect(bloc.state, anything); // Noncompliant
+      expect(bloc.state, 1);
+    },
+  );
 }

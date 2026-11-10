@@ -1,4 +1,4 @@
-import 'package:flutter_test/flutter_test.dart';
+import 'package:bloc_test/bloc_test.dart'; import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('adds', () {
@@ -49,6 +49,13 @@ void main() {
 
   if (kIsWeb) test('storage', () {});
   if (!kIsWeb) test('storage', () {});
+
+  group('CounterBloc', () {
+    blocTest<CounterBloc, int>('emits [1] on increment', build: () => CounterBloc(), expect: () => [1]);
+    blocTest<CounterBloc, int>('emits [1] on increment', build: () => CounterBloc(), expect: () => [1]); // Noncompliant
+    blocTest<CounterBloc, int>('emits [-1] on decrement', build: () => CounterBloc(), expect: () => [-1]);
+    test('emits [-1] on decrement', () {}); // Noncompliant
+  });
 }
 
 void sharedTests() {

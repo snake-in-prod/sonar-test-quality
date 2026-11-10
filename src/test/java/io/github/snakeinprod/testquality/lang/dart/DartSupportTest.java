@@ -82,6 +82,22 @@ class DartSupportTest {
   }
 
   @Test
+  void bloc_tests_count_expect_errors_and_verify() throws IOException {
+    TestFile f = extract("bloc_test.dart");
+    assertThat(f.tests()).extracting(TestCase::name, TestCase::suite, TestCase::skipped, TestCase::assertions, TestCase::mocks)
+      .containsExactly(
+        tuple("emits [] when nothing is added", "CounterBloc", false, 1, 0),
+        tuple("skips the seed", "CounterBloc", false, 4, 2),
+        tuple("only acts", "CounterBloc", false, 0, 0),
+        tuple("inherits skip", "CounterBloc > skipped", true, 1, 0));
+    TestCase seed = f.tests().get(1);
+    assertThat(seed.start().text()).isEqualTo("blocTest");
+    assertThat(seed.nameToken().text()).isEqualTo("'skips the seed'");
+    assertThat(seed.bodyGroup().is("(")).isTrue();
+    assertThat(seed.end()).isSameAs(seed.bodyGroup().last());
+  }
+
+  @Test
   void no_tests_gives_empty() {
     assertThat(support.extract(parse("void main() { print('test'); }"))).isSameAs(TestFile.EMPTY);
     assertThat(support.extract(parse("void test(String d, Function f) {}\nfoo.test('x', () {});"))).isSameAs(TestFile.EMPTY);

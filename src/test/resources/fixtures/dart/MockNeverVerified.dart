@@ -1,3 +1,4 @@
+import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
@@ -98,4 +99,23 @@ void main() {
     when(() => shared.load()).thenReturn(user);
     expect(Service(shared).current(), user);
   });
+
+  blocTest<UserBloc, UserState>(
+    'injected in build and forgotten',
+    build: () {
+      final api = MockApi(); // Noncompliant
+      final repo = MockRepo();
+      when(() => repo.load()).thenReturn(user);
+      return UserBloc(api, repo);
+    },
+    expect: () => [isA<Loaded>()],
+  );
+
+  blocTest<UserBloc, UserState>(
+    'shared mocks stubbed and verified',
+    build: () => UserBloc(shared),
+    act: (bloc) => bloc.add(Load()),
+    expect: () => [isA<Loaded>()],
+    verify: (_) => verify(() => shared.load()).called(1),
+  );
 }

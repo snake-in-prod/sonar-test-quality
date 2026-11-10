@@ -80,6 +80,18 @@ public final class DartTrees {
     return item.size() >= 2 && t != null && t.kind() == TokenKind.IDENT && Nodes.isLeaf(item.get(1), ":");
   }
 
+  /** The file imports {@code package:<library>/...}. */
+  public static boolean imports(Node.Group root, String library) {
+    List<Node> k = root.children();
+    for (int i = 0; i + 1 < k.size(); i++) {
+      Token t = Nodes.leaf(k.get(i + 1));
+      if (Nodes.isIdent(k.get(i), "import") && t != null && t.kind() == TokenKind.STRING && t.text().contains("package:" + library + "/")) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   public static boolean isAwaited(Chain c) {
     return c.precededBy("await");
   }

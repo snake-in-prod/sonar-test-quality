@@ -26,8 +26,8 @@ public class VerifyWithoutCall implements TestRule {
   @Override
   public void check(RuleContext ctx) {
     Node.Group root = ctx.file().root();
-    boolean mockito = imports(root, "mockito");
-    if (!mockito && !imports(root, "mocktail")) {
+    boolean mockito = DartTrees.imports(root, "mockito");
+    if (!mockito && !DartTrees.imports(root, "mocktail")) {
       return;
     }
     Set<String> mocks = mockVariables(root, MockNeverVerified.mockClasses(root));
@@ -95,17 +95,6 @@ public class VerifyWithoutCall implements TestRule {
       sb.append(t.text());
     }
     return sb.toString();
-  }
-
-  private static boolean imports(Node.Group root, String library) {
-    List<Node> k = root.children();
-    for (int i = 0; i + 1 < k.size(); i++) {
-      Token t = Nodes.leaf(k.get(i + 1));
-      if (Nodes.isIdent(k.get(i), "import") && t != null && t.kind() == TokenKind.STRING && t.text().contains("package:" + library + "/")) {
-        return true;
-      }
-    }
-    return false;
   }
 
   /** Variables declared or assigned anywhere in the file with a mock: {@code late MockX x;}, {@code x = MockX();}. */
