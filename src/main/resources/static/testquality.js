@@ -513,7 +513,7 @@ window.registerExtension('testquality/testquality', function (options) {
         return empty('no gate', 'Assign a quality gate to the project');
       }
       return [h('ul', {class: 'tq-chips', style: 'margin:0', 'aria-label': 'Quality gate ' + overall}, [chip(overall === 'Passed', overall, ' tq-status')]),
-        conditions.length === 0 ? empty('no tq_ conditions', 'Add conditions on tq_ metrics to the quality gate')
+        conditions.length === 0 ? empty('no tq_ conditions', 'The gate has no tq_ conditions, or they have no value yet (no tests, no report)')
           : h('ul', {class: 'tq-chips', 'aria-label': 'Conditions'}, conditions.map(function (c) {
             var ok = c.status !== 'ERROR';
             var bound = (c.comparator === 'LT' ? '≥ ' : '≤ ') + fmt(c.errorThreshold);
@@ -534,7 +534,8 @@ window.registerExtension('testquality/testquality', function (options) {
     return api('issues/search', {componentKeys: project, resolved: 'false', rules: keys.join(','), facets: 'rules', ps: 1})
       .then(function (issues) {
         var facet = (issues.facets || []).filter(function (f) { return f.property === 'rules'; })[0] || {values: []};
-        return [names, facet.values.filter(function (v) { return v.count > 0; })];
+        // SonarQube facets ignore their own filter (sticky facets): the rules facet lists every rule with issues in the project
+        return [names, facet.values.filter(function (v) { return v.count > 0 && names[v.val]; })];
       });
   }).then(function (r) {
     var counts = r[1].sort(function (a, b) { return b.count - a.count; }).map(function (v) {
