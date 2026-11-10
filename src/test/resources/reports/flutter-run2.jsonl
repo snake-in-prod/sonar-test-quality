@@ -1,0 +1,11 @@
+00:00 +0: loading test/cart_test.dart
+{"protocolVersion":"0.1.1","runnerVersion":"1.25.8","pid":4388,"type":"start","time":0}
+{"suite":{"id":0,"platform":"vm","path":"test/cart_test.dart"},"type":"suite","time":0}
+{"test":{"id":1,"name":"loading test/cart_test.dart","suiteID":0,"groupIDs":[],"metadata":{"skip":false,"skipReason":null},"line":null,"column":null,"url":null},"type":"testStart","time":1}
+{"testID":1,"result":"success","skipped":false,"hidden":true,"type":"testDone","time":850}
+{"test":{"id":4,"name":"Cart adds an item","suiteID":0,"groupIDs":[2,3],"metadata":{"skip":false,"skipReason":null},"line":6,"column":5,"url":"file:///home/ci/app/test/cart_test.dart"},"type":"testStart","time":860}
+{"testID":4,"result":"success","skipped":false,"hidden":false,"type":"testDone","time":890}
+{"test":{"id":5,"name":"Cart syncs with server","suiteID":0,"groupIDs":[2,3],"metadata":{"skip":false,"skipReason":null},"line":12,"column":5,"url":"file:///home/ci/app/test/cart_test.dart"},"type":"testStart","time":891}
+{"testID":5,"error":"Expected: <200> Actual: <503>","stackTrace":"test/cart_test.dart 14:7  main.<fn>.<fn>","isFailure":true,"type":"error","time":3000}
+{"testID":5,"result":"failure","skipped":false,"hidden":false,"type":"testDone","time":3091}
+{"success":false,"type":"done","time":3100}
