@@ -20,7 +20,7 @@ import java.util.regex.Pattern;
  * in the test body counts (no implementation, no chained configuration: those are stubs), and only when every other use
  * of {@code x} in the test passes it whole: a call argument, a JSX attribute value, or a property value of an object
  * literal passed as an argument. Any other use (a call, a member access, an assertion, a helper named expect* / assert*
- * / verify* / check*) keeps the rule silent.
+ * / verify* / check*) keeps the rule silent, and so does a test whose name mentions the mock but no call.
  */
 public class MockNeverAsserted implements TestRule {
 
@@ -43,12 +43,22 @@ public class MockNeverAsserted implements TestRule {
       }));
       for (Chain c : chains) {
         Token name = declared(c);
-        if (name != null && passedOnly(name, body, chains, parents)) {
+        if (name != null && !namedAsSetup(tc, name) && passedOnly(name, body, chains, parents)) {
           ctx.report(name, "\"" + name.text() + "\" is passed in but never asserted on; check its calls with expect("
             + name.text() + ").toHaveBeenCalled...() or pass an inline " + c.firstName() + ".fn().");
         }
       }
     }
+  }
+
+  /**
+   * The test name mentions the mock but not a call of it ("shows the toggle when onChange is defined"): the mock is a
+   * precondition the test is about, not a callback it forgot to check.
+   */
+  private static boolean namedAsSetup(TestCase tc, Token name) {
+    String title = tc.name() == null ? "" : tc.name();
+    return Pattern.compile("\\b" + Pattern.quote(name.text()) + "\\b").matcher(title).find()
+      && !title.toLowerCase(java.util.Locale.ROOT).contains("call");
   }
 
   /** The variable of {@code const|let x = jest.fn()} (a type annotation allowed), or null. */

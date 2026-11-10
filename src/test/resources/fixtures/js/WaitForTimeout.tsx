@@ -49,6 +49,14 @@ test.describe('checkout', () => {
     await setTimeout(0);
   });
 
+  test('lets the clock tick between two records', async () => {
+    await seed('first');
+    await new Promise((resolve) => {
+      setTimeout(resolve, 50);
+    });
+    await seed('second');
+  });
+
   test('schedules without waiting', async () => {
     setTimeout(() => emit('tick'), 1000);
     const timer = new Promise(r => setTimeout(r, 1000));

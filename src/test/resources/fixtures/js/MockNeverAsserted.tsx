@@ -81,6 +81,12 @@ describe('<Form />', () => {
     expect(done).toBe(true);
   });
 
+  it('shows the save button when onSave is defined', () => {
+    const onSave = jest.fn();
+    render(<Form onSave={onSave} />);
+    expect(screen.getByRole('button')).toBeInTheDocument();
+  });
+
   it('passes an inline mock', () => {
     render(<Form onSave={jest.fn()} />);
     expect(screen.getByRole('form')).toBeInTheDocument();
