@@ -13,6 +13,7 @@ import io.github.snakeinprod.testquality.parse.TokenKind;
 import io.github.snakeinprod.testquality.rules.RuleContext;
 import io.github.snakeinprod.testquality.rules.TestRule;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -117,15 +118,24 @@ public class PatchWhereDefined implements TestRule {
   /** The one project file of a dotted module name ({@code a/b.py} or {@code a/b/__init__.py}, under any source root), or null. */
   private static String modulePath(RuleContext ctx, String dotted) {
     String rel = dotted.replace('.', '/');
-    List<String> found = new ArrayList<>();
-    for (String p : ctx.projectPaths()) {
-      for (String c : List.of(rel + ".py", rel + "/__init__.py")) {
-        if (p.equals(c) || p.endsWith("/" + c)) {
-          found.add(p);
+    Map<String, List<String>> bySuffix = suffixIndex(ctx);
+    List<String> found = new ArrayList<>(bySuffix.getOrDefault(rel + ".py", List.of()));
+    found.addAll(bySuffix.getOrDefault(rel + "/__init__.py", List.of()));
+    return found.size() == 1 ? found.get(0) : null;
+  }
+
+  /** Every project path under each of its "/"-separated suffixes ({@code a/b/c.py} under itself, {@code b/c.py} and {@code c.py}). */
+  private static Map<String, List<String>> suffixIndex(RuleContext ctx) {
+    return ctx.shared("PatchWhereDefined.suffixes", k -> {
+      Map<String, List<String>> out = new HashMap<>();
+      for (String p : ctx.projectPaths()) {
+        out.computeIfAbsent(p, s -> new ArrayList<>()).add(p);
+        for (int i = p.indexOf('/'); i >= 0; i = p.indexOf('/', i + 1)) {
+          out.computeIfAbsent(p.substring(i + 1), s -> new ArrayList<>()).add(p);
         }
       }
-    }
-    return found.size() == 1 ? found.get(0) : null;
+      return out;
+    });
   }
 
   /** How often a name appears in a file, attributes ({@code x.name}) left out; its import counts once. */

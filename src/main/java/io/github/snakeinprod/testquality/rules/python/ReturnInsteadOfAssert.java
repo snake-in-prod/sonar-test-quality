@@ -6,7 +6,12 @@ import io.github.snakeinprod.testquality.parse.Node;
 import io.github.snakeinprod.testquality.parse.Token;
 import io.github.snakeinprod.testquality.rules.RuleContext;
 import io.github.snakeinprod.testquality.rules.TestRule;
+import io.github.snakeinprod.testquality.parse.TokenKind;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /** A test that returns its comparison passes whatever the result is. */
@@ -16,8 +21,17 @@ public class ReturnInsteadOfAssert implements TestRule {
 
   @Override
   public void check(RuleContext ctx) {
+    Set<String> names = new HashSet<>();
+    ctx.tests().tests().forEach(t -> names.add(t.name()));
+    Map<String, List<Token>> uses = new HashMap<>();
+    for (Token x : ctx.file().tokens()) {
+      if (x.kind() == TokenKind.IDENT && names.contains(x.text())) {
+        uses.computeIfAbsent(x.text(), k -> new ArrayList<>()).add(x);
+      }
+    }
     for (TestCase t : ctx.tests().tests()) {
-      if (!calledElsewhere(ctx, t)) {
+      // the test function is also used as a helper by other code of the file, which may check what it returns
+      if (uses.getOrDefault(t.name(), List.of()).stream().allMatch(x -> x == t.nameToken())) {
         returns(ctx, ((PyStatement) t.body()).body());
       }
     }
@@ -42,10 +56,5 @@ public class ReturnInsteadOfAssert implements TestRule {
       }
       returns(ctx, s.body());
     }
-  }
-
-  /** The test function is also used as a helper by other code of the file, which may check what it returns. */
-  private static boolean calledElsewhere(RuleContext ctx, TestCase t) {
-    return ctx.file().tokens().stream().anyMatch(x -> x != t.nameToken() && x.isIdent(t.name()));
   }
 }

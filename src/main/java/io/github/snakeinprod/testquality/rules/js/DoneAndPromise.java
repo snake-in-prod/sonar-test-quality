@@ -11,7 +11,10 @@ import io.github.snakeinprod.testquality.parse.Token;
 import io.github.snakeinprod.testquality.parse.TokenKind;
 import io.github.snakeinprod.testquality.rules.RuleContext;
 import io.github.snakeinprod.testquality.rules.TestRule;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /** A test that takes done and is async or returns a promise: Jest fails or waits on the wrong one. */
@@ -60,12 +63,19 @@ public class DoneAndPromise implements TestRule {
     if (body == null) {
       return null;
     }
-    for (JsTrees.Fn f : JsTrees.functions(file.root())) {
-      if (f.body().first().equals(body.first()) && f.body().last().equals(body.last())) {
-        return f;
+    FnIndex index = file.get(FnIndex.class);
+    if (index == null) {
+      index = new FnIndex(new HashMap<>());
+      for (JsTrees.Fn f : JsTrees.functions(file.root())) {
+        index.byBody().putIfAbsent(Arrays.asList(f.body().first(), f.body().last()), f);
       }
+      file.put(FnIndex.class, index);
     }
-    return null;
+    return index.byBody().get(Arrays.asList(body.first(), body.last()));
+  }
+
+  /** The file's function literals by the first and last token of their body, built once per file. */
+  private record FnIndex(Map<List<Token>, JsTrees.Fn> byBody) {
   }
 
   private static boolean each(ParsedFile file, TestCase tc) {
