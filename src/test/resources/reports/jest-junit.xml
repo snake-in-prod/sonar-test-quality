@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="jest tests" tests="3" failures="1" errors="0" time="0.912">
+  <testsuite name="Cart" errors="0" failures="1" skipped="0" timestamp="2026-11-02T10:15:01" time="0.871" tests="3">
+    <testcase classname="Cart total" name="Cart total sums prices" time="0.004">
+    </testcase>
+    <testcase classname="Cart total" name="Cart total applies discount" time="0.512">
+      <failure>Error: expect(received).toBe(expected)</failure>
+    </testcase>
+    <testcase name="renders empty state" time="0.03">
+      <system-out>rendered</system-out>
+    </testcase>
+  </testsuite>
+</testsuites>

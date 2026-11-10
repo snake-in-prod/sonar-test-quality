@@ -1,0 +1,25 @@
+{
+  "schemaVersion": "2",
+  "thresholds": { "high": 80, "low": 60, "break": null },
+  "projectRoot": "/home/ci/work/app",
+  "config": {},
+  "framework": { "name": "StrykerJS", "version": "8.7.1" },
+  "files": {
+    "/home/ci/work/app/web/src/cart.ts": {
+      "language": "typescript",
+      "source": "export function total(items: number[]) {\n  return items.reduce((a, b) => a + b, 0);\n}\n",
+      "mutants": [
+        { "id": "0", "mutatorName": "ArithmeticOperator", "replacement": "a - b", "status": "Killed", "static": false,
+          "coveredBy": ["0"], "killedBy": ["0"], "testsCompleted": 1,
+          "location": { "start": { "line": 2, "column": 33 }, "end": { "line": 2, "column": 38 } } },
+        { "id": "1", "mutatorName": "BlockStatement", "replacement": "{}", "status": "Survived", "static": false,
+          "coveredBy": ["0"], "killedBy": [], "testsCompleted": 1,
+          "location": { "start": { "line": 1, "column": 40 }, "end": { "line": 3, "column": 2 } } },
+        { "id": "2", "mutatorName": "ArrayDeclaration", "replacement": "[]", "status": "RuntimeError",
+          "location": { "start": { "line": 1, "column": 23 }, "end": { "line": 1, "column": 39 } } },
+        { "id": "3", "mutatorName": "ArithmeticOperator", "replacement": "a * b", "status": "Pending",
+          "location": { "start": { "line": 2, "column": 33 }, "end": { "line": 2, "column": 38 } } }
+      ]
+    }
+  }
+}

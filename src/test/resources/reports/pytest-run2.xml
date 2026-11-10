@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuites name="pytest tests">
+  <testsuite name="pytest" errors="0" failures="1" skipped="1" tests="4" time="2.104" timestamp="2026-11-02T10:20:44.000000+00:00" hostname="runner">
+    <testcase classname="tests.test_calc" name="test_add" time="0.004" />
+    <testcase classname="tests.test_calc" name="test_add_negative" time="0.110" />
+    <testcase classname="tests.test_net" name="test_retry_backoff" time="1.900">
+      <failure message="AssertionError: expected 3 retries, got 2">def test_retry_backoff():
+&gt;       assert client.retries == 3
+E       AssertionError: expected 3 retries, got 2</failure>
+    </testcase>
+    <testcase classname="tests.test_net" name="test_proxy" time="0.000">
+      <skipped type="pytest.skip" message="needs a proxy">tests/test_net.py:40: needs a proxy</skipped>
+    </testcase>
+  </testsuite>
+</testsuites>

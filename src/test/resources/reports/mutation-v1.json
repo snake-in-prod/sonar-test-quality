@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "1",
+  "thresholds": { "high": 80, "low": 60 },
+  "files": {
+    "src/calc.py": {
+      "language": "python",
+      "source": "def add(a, b):\n    return a + b\n",
+      "mutants": [
+        { "id": "1", "mutatorName": "ArithmeticOperator", "replacement": "a - b", "status": "Killed",
+          "location": { "start": { "line": 2, "column": 12 }, "end": { "line": 2, "column": 17 } } },
+        { "id": "2", "mutatorName": "ArithmeticOperator", "replacement": "a * b", "status": "Survived",
+          "location": { "start": { "line": 2, "column": 12 }, "end": { "line": 2, "column": 17 } } },
+        { "id": "3", "mutatorName": "ReturnValue", "replacement": "None", "status": "Timeout",
+          "location": { "start": { "line": 2, "column": 5 }, "end": { "line": 2, "column": 17 } } },
+        { "id": "4", "mutatorName": "ReturnValue", "replacement": "0", "status": "Ignored",
+          "location": { "start": { "line": 2, "column": 5 }, "end": { "line": 2, "column": 17 } } }
+      ]
+    },
+    "src/util/strings.py": {
+      "language": "python",
+      "source": "def up(s):\n    return s.upper()\n",
+      "mutants": [
+        { "id": "5", "mutatorName": "MethodExpression", "replacement": "s.lower()", "status": "NoCoverage",
+          "location": { "start": { "line": 2, "column": 12 }, "end": { "line": 2, "column": 21 } } },
+        { "id": "6", "mutatorName": "MethodExpression", "replacement": "s", "status": "CompileError",
+          "location": { "start": { "line": 2, "column": 12 }, "end": { "line": 2, "column": 21 } } }
+      ]
+    }
+  }
+}

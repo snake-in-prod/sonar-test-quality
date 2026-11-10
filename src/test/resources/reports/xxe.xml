@@ -1,0 +1,3 @@
+<?xml version="1.0"?>
+<!DOCTYPE testsuites [<!ENTITY x SYSTEM "file:///etc/hostname">]>
+<testsuites><testsuite name="s"><testcase classname="c" name="&x;" time="1"/></testsuite></testsuites>

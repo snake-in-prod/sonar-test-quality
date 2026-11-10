@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuites name="pytest tests">
+  <testsuite name="pytest" errors="0" failures="0" skipped="1" tests="4" time="1.503" timestamp="2026-11-02T10:15:01.000000+00:00" hostname="runner">
+    <testcase classname="tests.test_calc" name="test_add" time="0.003" />
+    <testcase classname="tests.test_calc" name="test_add_negative" time="0.120" />
+    <testcase classname="tests.test_net" name="test_retry_backoff" time="1.250" />
+    <testcase classname="tests.test_net" name="test_proxy" time="0.000">
+      <skipped type="pytest.skip" message="needs a proxy">tests/test_net.py:40: needs a proxy</skipped>
+    </testcase>
+  </testsuite>
+</testsuites>
