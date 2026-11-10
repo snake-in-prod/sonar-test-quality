@@ -1,0 +1,14 @@
+<p>An assert on a mock's assertion method without calling it (<code>assert m.assert_called_once</code>), or on an
+attribute the mock creates on access (<code>assert m.called_with</code>), tests a bound method or a child mock.</p>
+<h2>Why is this an issue?</h2>
+<p>Both are always truthy, so the assertion never fails and the interaction is never checked.</p>
+<h2>Noncompliant code example</h2>
+<pre>
+assert m.assert_called_once
+self.assertTrue(m.has_calls)
+</pre>
+<h2>Compliant solution</h2>
+<pre>
+m.assert_called_once()
+m.assert_has_calls([call(1)])
+</pre>

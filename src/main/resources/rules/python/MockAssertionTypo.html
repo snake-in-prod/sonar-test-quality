@@ -1,0 +1,16 @@
+<p>A mock creates any attribute on access. A misspelled assertion (<code>assert_called_onec</code>) or an assertion name
+without its <code>assert_</code> prefix (<code>called_once_with</code>, <code>has_calls</code>) is just another child mock:
+calling it records a call and checks nothing.</p>
+<h2>Why is this an issue?</h2>
+<p>The test passes whether the code under test called the mock or not. Recent Python versions raise
+<code>AttributeError</code> for some of these names, older ones and other mock libraries stay silent.</p>
+<h2>Noncompliant code example</h2>
+<pre>
+m.assert_called_onec()
+m.called_once_with(1)
+</pre>
+<h2>Compliant solution</h2>
+<pre>
+m.assert_called_once()
+m.assert_called_once_with(1)
+</pre>

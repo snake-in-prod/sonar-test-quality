@@ -1,0 +1,18 @@
+<p>A mock passed by <code>@patch</code>, bound by <code>with patch(...) as m</code> or created with
+<code>Mock()</code> / <code>mocker.patch(...)</code> that the test never mentions again.</p>
+<h2>Why is this an issue?</h2>
+<p>The test does not check how the code used the patched dependency, and a created mock nobody receives is dead code.
+When the patch only stubs a side effect, name the argument with a leading underscore to say so.</p>
+<h2>Noncompliant code example</h2>
+<pre>
+@patch("app.mail")
+def test_signup(mail):
+    assert signup("a@b.c")
+</pre>
+<h2>Compliant solution</h2>
+<pre>
+@patch("app.mail")
+def test_signup(mail):
+    assert signup("a@b.c")
+    mail.send.assert_called_once()
+</pre>

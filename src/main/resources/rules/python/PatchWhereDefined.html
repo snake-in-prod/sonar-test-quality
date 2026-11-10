@@ -1,0 +1,15 @@
+<p><code>patch("lib.clock.now")</code> replaces the name <code>now</code> in <code>lib.clock</code>. A module that did
+<code>from lib.clock import now</code> holds its own reference to the original function and keeps calling it.</p>
+<h2>Why is this an issue?</h2>
+<p>The code under test is not patched: the test runs the real dependency and checks a mock nobody calls.</p>
+<h2>Noncompliant code example</h2>
+<pre>
+# app.py: from lib.clock import now
+@patch("lib.clock.now")
+def test_run(now): ...
+</pre>
+<h2>Compliant solution</h2>
+<pre>
+@patch("app.now")
+def test_run(now): ...
+</pre>
