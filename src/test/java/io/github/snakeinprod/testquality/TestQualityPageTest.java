@@ -24,7 +24,9 @@ class TestQualityPageTest {
       assertThat(js).contains("window.registerExtension('" + key + "'");
       assertThat(js.chars().filter(c -> c == '{').count()).isEqualTo(js.chars().filter(c -> c == '}').count());
       assertThat(js.chars().filter(c -> c == '(').count()).isEqualTo(js.chars().filter(c -> c == ')').count());
-      assertThat(js).doesNotContain("http://", "https://");
+      // no external resources: the SVG namespace is the only URL; charts are built with DOM calls, never innerHTML
+      assertThat(js.replace("'http://www.w3.org/2000/svg'", "")).doesNotContain("http://", "https://");
+      assertThat(js).contains("createElementNS(").doesNotContain("innerHTML", "eval(");
     }
   }
 }
