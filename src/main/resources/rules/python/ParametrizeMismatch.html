@@ -1,0 +1,28 @@
+<p>The names given to <code>@pytest.mark.parametrize</code> must match the test's parameters, and each row must have one
+value per name.</p>
+<h2>Why is this an issue?</h2>
+<p>A row of the wrong length makes pytest error at collection; a misspelled name errors or feeds a different fixture than
+intended. Only literal names and literal rows (tuples, lists, <code>pytest.param(...)</code>) are checked. A name missing
+from the signature is reported only when it is a near typo of a parameter, or when the test takes no parameters and the
+file has no autouse or <code>usefixtures</code> fixture, since a parametrized name may legally feed a fixture. Indirect
+parametrization and tests taking <code>*args</code> / <code>**kwargs</code> are not checked for names.</p>
+<h2>Noncompliant code example</h2>
+<pre>
+@pytest.mark.parametrize("a,b", [(1, 2), (2,)])  # Noncompliant
+def test_pairs(a, b):
+    assert a &lt; b
+
+@pytest.mark.parametrize("expected", [1, 2])  # Noncompliant
+def test_value(expect):
+    assert expect
+</pre>
+<h2>Compliant solution</h2>
+<pre>
+@pytest.mark.parametrize("a,b", [(1, 2), (2, 3)])
+def test_pairs(a, b):
+    assert a &lt; b
+
+@pytest.mark.parametrize("expected", [1, 2])
+def test_value(expected):
+    assert expected
+</pre>

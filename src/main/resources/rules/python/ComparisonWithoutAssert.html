@@ -1,0 +1,18 @@
+<p>A statement that is only a comparison (<code>==</code>, <code>!=</code>, <code>&lt;</code>, <code>is</code>, <code>in</code>...)
+computes a result and drops it. Usually the <code>assert</code> keyword was forgotten.</p>
+<h2>Why is this an issue?</h2>
+<p>The line looks like a check but can never fail. Comparisons used for their side effects
+(<code>x == 1 or pytest.fail()</code>, conditional expressions) and comparisons inside calls or assignments are not
+reported.</p>
+<h2>Noncompliant code example</h2>
+<pre>
+def test_sum():
+    result = add(1, 2)
+    result == 3  # Noncompliant
+</pre>
+<h2>Compliant solution</h2>
+<pre>
+def test_sum():
+    result = add(1, 2)
+    assert result == 3
+</pre>

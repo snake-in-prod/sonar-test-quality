@@ -1,0 +1,15 @@
+<p>A test that ends with <code>return a == b</code> instead of <code>assert a == b</code> passes whatever the comparison gives:
+the runner ignores the returned value (recent pytest versions only warn).</p>
+<h2>Why is this an issue?</h2>
+<p>The test checks nothing. Returns inside nested helper functions, conditional expressions and tests that other code of
+the file calls are not reported.</p>
+<h2>Noncompliant code example</h2>
+<pre>
+def test_sum():
+    return add(1, 2) == 3  # Noncompliant
+</pre>
+<h2>Compliant solution</h2>
+<pre>
+def test_sum():
+    assert add(1, 2) == 3
+</pre>
