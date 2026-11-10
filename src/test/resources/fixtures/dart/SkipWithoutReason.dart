@@ -22,6 +22,16 @@ void main() {
   test('negated', () {}, skip: !Platform.isLinux);
   test('ternary', () {}, skip: isWindows ? 'no windows' : false);
   test('interpolated', () {}, skip: 'blocked by $issue');
+  test(
+    'reason in a comment after',
+    () {},
+    skip: true,
+    // TODO: fails on the inbox tap, see the issue
+  );
+  test('reason in a trailing comment', () {},
+      skip:
+          true); // TODO: re-enable, see the issue
+
   build(skip: true);
   runner.test('x', () {}, skip: true);
 }

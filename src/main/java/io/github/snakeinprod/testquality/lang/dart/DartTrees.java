@@ -3,6 +3,7 @@ package io.github.snakeinprod.testquality.lang.dart;
 import io.github.snakeinprod.testquality.parse.Chain;
 import io.github.snakeinprod.testquality.parse.Node;
 import io.github.snakeinprod.testquality.parse.Nodes;
+import io.github.snakeinprod.testquality.parse.ParsedFile;
 import io.github.snakeinprod.testquality.parse.Token;
 import io.github.snakeinprod.testquality.parse.TokenKind;
 import java.util.ArrayList;
@@ -78,6 +79,23 @@ public final class DartTrees {
   private static boolean isNamed(List<Node> item) {
     Token t = Nodes.leaf(item.get(0));
     return item.size() >= 2 && t != null && t.kind() == TokenKind.IDENT && Nodes.isLeaf(item.get(1), ":");
+  }
+
+  /** The file imports {@code package:<library>/...}. */
+  public static boolean imports(Node.Group root, String library) {
+    List<Node> k = root.children();
+    for (int i = 0; i + 1 < k.size(); i++) {
+      Token t = Nodes.leaf(k.get(i + 1));
+      if (Nodes.isIdent(k.get(i), "import") && t != null && t.kind() == TokenKind.STRING && t.text().contains("package:" + library + "/")) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** A comment ends on a line from {@code first} to {@code last}: code there that its author explained. */
+  public static boolean commented(ParsedFile file, int first, int last) {
+    return file.comments().stream().anyMatch(c -> c.endLine() >= first && c.endLine() <= last);
   }
 
   public static boolean isAwaited(Chain c) {

@@ -92,8 +92,12 @@ public final class RuleVerifier {
         continue;
       }
       checked++;
-      Analyzer.Result r = analyzer.analyze(e.getKey(), e.getValue(), content(root.resolve(e.getKey())));
-      compare(e.getKey(), r.file().comments(), r.issues(), problems);
+      String text = content(root.resolve(e.getKey()));
+      List<Token> comments = analyzer.analyze(e.getKey(), e.getValue(), text).file().comments();
+      // the marks are blanked out, so a rule that reads comments sees only the fixture's own
+      List<Token> marks = comments.stream().filter(c -> MARK.matcher(c.text()).find()).toList();
+      Analyzer.Result r = analyzer.analyze(e.getKey(), e.getValue(), blank(text, marks));
+      compare(e.getKey(), comments, r.issues(), problems);
     }
     // source files of a directory fixture, after every test file: the source rules' pass
     Map<String, Boolean> reach = new TreeMap<>();
@@ -142,6 +146,20 @@ public final class RuleVerifier {
         problems.add(path + ":" + line + " message should contain \"" + messages.get(line) + "\", got " + got);
       }
     }
+  }
+
+  /** The source with each comment replaced by spaces, lines and columns kept. */
+  private static String blank(String source, List<Token> comments) {
+    String[] lines = source.split("\n", -1);
+    for (Token c : comments) {
+      for (int l = c.line(); l <= c.endLine(); l++) {
+        String s = lines[l - 1];
+        int from = l == c.line() ? c.column() : 0;
+        int to = l == c.endLine() ? Math.min(c.endColumn(), s.length()) : s.length();
+        lines[l - 1] = s.substring(0, from) + " ".repeat(Math.max(0, to - from)) + s.substring(to);
+      }
+    }
+    return String.join("\n", lines);
   }
 
   private static List<Path> walk(Path dir) {
