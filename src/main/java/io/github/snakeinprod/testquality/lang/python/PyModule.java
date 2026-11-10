@@ -33,6 +33,22 @@ public record PyModule(List<PyStatement> statements, Map<String, String> imports
     return new PyModule(statements, Map.copyOf(imports));
   }
 
+  /** The imports bound when the module loads: {@link #imports} without those inside functions, which run at call time. */
+  public Map<String, String> loadImports() {
+    Map<String, String> out = new HashMap<>();
+    addLoadImports(statements, out);
+    return out;
+  }
+
+  private static void addLoadImports(List<PyStatement> block, Map<String, String> out) {
+    for (PyStatement s : block) {
+      addImports(s, out);
+      if (!s.keyword().equals("def")) {
+        addLoadImports(s.body(), out);
+      }
+    }
+  }
+
   /** Every statement, nested ones included, in source order. */
   public List<PyStatement> walk() {
     List<PyStatement> out = new ArrayList<>();

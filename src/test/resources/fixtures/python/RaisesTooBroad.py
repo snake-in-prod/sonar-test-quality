@@ -31,6 +31,13 @@ class TestApi(unittest.TestCase):
         with self.assertRaises(Exception):  # Noncompliant
             api.call()
 
+    def test_parenthesized_alias_unread(self):
+        with (
+            self.assertRaises(Exception) as e,  # Noncompliant
+            patch("app.clock"),
+        ):
+            parse("x")
+
     def test_unittest_setup_inside(self):
         with self.assertRaises(ValueError):  # Noncompliant
             user = create_user()
@@ -61,6 +68,22 @@ def test_setup_with_alias_checked():
         order = make_order()
         order.submit()
     assert "empty" in str(exc.value)
+
+
+class TestParenthesizedWith(unittest.TestCase):
+    def test_alias_checked(self):
+        with (
+            self.assertRaises(Exception) as e,
+            patch("app.clock"),
+        ):
+            parse("x")
+        self.assertIn("bad", str(e.exception))
+
+
+def test_date_built_inside():
+    with pytest.raises(TimezoneMissing):
+        when = datetime(2001, 2, 3)
+        to_utc(when)
 
 
 def test_setup_outside_block():

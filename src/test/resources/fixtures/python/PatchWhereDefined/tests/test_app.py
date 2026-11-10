@@ -1,7 +1,7 @@
 from unittest import mock
 from unittest.mock import patch
 
-from app import notify, run, save
+from app import launch, menu, notify, run, save
 
 
 @patch("lib.clock.now")  # Noncompliant {{"lib.clock.now" is patched where it is defined, but app imports it by name and keeps the original; patch "app.now" instead.}}
@@ -67,6 +67,18 @@ def test_local_import():
     with patch("lib.clock.now"):
         from app import run as fresh
         assert fresh()
+
+
+@patch("lib.jobs.start")
+def test_function_local_import(start):
+    launch()
+    start.assert_called_once()
+
+
+@patch("lib.lang.languages", return_value=["en"])
+def test_defining_module_uses_the_name(languages):
+    # lib.lang.codes() sees the patch, and the test may go through it
+    assert menu()
 
 
 def test_patch_object():

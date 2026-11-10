@@ -59,6 +59,23 @@ def test_patched_stub_named_unused(_mail):
     assert run()
 
 
+@patch("app.mail", return_value=None)
+@patch("app.clock", side_effect=OSError)
+def test_configured_stubs(clock, mail):
+    assert not run()
+
+
+def test_configured_stub_bound():
+    with patch("app.mail", return_value=None) as mail:
+        assert run()
+
+
+@patch("app.mail")
+@patch("app.clock")
+def test_names_that_say_unused(unused_mock, ignored):
+    assert run()
+
+
 @patch("app.mail", MagicMock())
 @patch("app.clock", new=Mock())
 def test_replacement_given(tmp_path):

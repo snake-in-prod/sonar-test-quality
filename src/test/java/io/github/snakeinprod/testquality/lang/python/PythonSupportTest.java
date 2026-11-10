@@ -116,6 +116,7 @@ class PythonSupportTest {
   @Test
   void fixtures_named_test_are_not_tests() {
     TestFile f = extract("""
+      from contextlib import contextmanager
       import pytest
       from pytest import fixture
 
@@ -129,6 +130,10 @@ class PythonSupportTest {
 
       def test_real(test_client):
           assert test_client
+
+      @contextmanager
+      def test_server_running():
+          yield
       """);
     assertThat(f.tests()).extracting(TestCase::name).containsExactly("test_real");
   }
