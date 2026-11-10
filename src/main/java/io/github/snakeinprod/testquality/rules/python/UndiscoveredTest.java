@@ -13,6 +13,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * A function or class with assertions that pytest or unittest never collects because of its name. Only flags code that
@@ -115,8 +116,9 @@ public class UndiscoveredTest implements TestRule {
 
   /** The name is read anywhere in this file (also in a string, for getattr or __all__) or in any other project file. */
   private static boolean referenced(RuleContext ctx, String name, Token def) {
+    Pattern word = Pattern.compile("\\b" + Pattern.quote(name) + "\\b");
     for (Token t : ctx.file().tokens()) {
-      if (t != def && (t.isIdent(name) || t.kind() == TokenKind.STRING && t.text().matches("(?s).*\\b" + name + "\\b.*"))) {
+      if (t != def && (t.isIdent(name) || t.kind() == TokenKind.STRING && word.matcher(t.text()).find())) {
         return true;
       }
     }
