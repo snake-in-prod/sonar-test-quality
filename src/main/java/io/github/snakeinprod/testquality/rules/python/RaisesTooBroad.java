@@ -26,7 +26,7 @@ public class RaisesTooBroad implements TestRule {
   private static final Set<String> BROAD = Set.of("Exception", "BaseException");
   /** Calls that build values and practically never raise the expected exception. */
   private static final Set<String> HARMLESS = Set.of("str", "int", "float", "bool", "bytes", "len", "list", "dict", "tuple", "set",
-    "frozenset", "range", "repr", "sorted", "print", "isinstance", "object");
+    "frozenset", "range", "repr", "sorted", "print", "isinstance", "object", "datetime", "date", "timedelta");
 
   @Override
   public void check(RuleContext ctx) {
@@ -63,7 +63,7 @@ public class RaisesTooBroad implements TestRule {
       return;
     }
     boolean with = s.keyword().equals("with");
-    if (with && aliasRead(ctx.file(), t, s)) {
+    if (with && aliasRead(ctx.file(), t, s, c)) {
       return;
     }
     String code = code(ctx.file(), c);
@@ -96,17 +96,19 @@ public class RaisesTooBroad implements TestRule {
     return pytest || unittest ? c.callAfter(head.size() - 1) : null;
   }
 
-  /** {@code with ... as name:} and the test reads that name after the header (to check the type or message). */
-  private static boolean aliasRead(ParsedFile f, TestCase t, PyStatement with) {
-    List<Node> n = with.nodes();
-    for (int i = 0; i + 1 < n.size(); i++) {
-      if (Nodes.isIdent(n.get(i), "as") && Nodes.leaf(n.get(i + 1)) != null) {
-        String alias = Nodes.leaf(n.get(i + 1)).text();
-        Token headerEnd = n.get(n.size() - 1).last();
-        return f.tokens().stream().anyMatch(tok -> tok.isIdent(alias) && after(tok, headerEnd) && !after(tok, t.end()));
-      }
+  /**
+   * {@code with raises(...) as name:} (also as one item of a parenthesized {@code with (...)}) and the test reads that
+   * name after the header (to check the type or message).
+   */
+  private static boolean aliasRead(ParsedFile f, TestCase t, PyStatement with, Chain raises) {
+    List<Token> tokens = f.tokens();
+    int i = tokens.indexOf(raises.last());
+    if (i < 0 || i + 2 >= tokens.size() || !tokens.get(i + 1).isIdent("as") || tokens.get(i + 2).kind() != TokenKind.IDENT) {
+      return false;
     }
-    return false;
+    String alias = tokens.get(i + 2).text();
+    Token headerEnd = with.nodes().get(with.nodes().size() - 1).last();
+    return tokens.stream().anyMatch(tok -> tok.isIdent(alias) && after(tok, headerEnd) && !after(tok, t.end()));
   }
 
   private static boolean after(Token a, Token b) {

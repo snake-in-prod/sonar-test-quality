@@ -21,7 +21,11 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/** Patching the module that defines a name has no effect on code that imported the name with from-import. */
+/**
+ * Patching the module that defines a name has no effect on code that imported the name with from-import. Stays silent
+ * when the import runs inside a function (it reads the patched name at call time) and when the defining module uses
+ * the name itself (the test may go through that module).
+ */
 public class PatchWhereDefined implements TestRule {
 
   private static final Pattern TARGET = Pattern.compile("[rRuU]?(['\"])([A-Za-z_]\\w*(?:\\.[A-Za-z_]\\w*)+)\\1");
@@ -71,6 +75,11 @@ public class PatchWhereDefined implements TestRule {
       // the test uses the defining module itself, whose own functions do see the patch
       return;
     }
+    String definingPath = modulePath(ctx, defining);
+    ParsedFile definingCode = definingPath == null ? null : ctx.project(definingPath);
+    if (definingCode != null && references(definingCode, target.substring(defining.length() + 1)) > 1) {
+      return;
+    }
     String fix = null;
     String user = null;
     for (Map.Entry<String, String> e : modules.entrySet()) {
@@ -83,7 +92,7 @@ public class PatchWhereDefined implements TestRule {
         // this module reaches the name through its module, so the patch works for it
         return;
       }
-      for (Map.Entry<String, String> i : pm.imports().entrySet()) {
+      for (Map.Entry<String, String> i : pm.loadImports().entrySet()) {
         String local = i.getKey();
         if (fix == null && i.getValue().equals(target) && !local.contains(".") && references(code, local) > 1) {
           fix = e.getKey() + "." + local;

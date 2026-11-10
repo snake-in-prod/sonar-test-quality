@@ -1,6 +1,7 @@
 from lib.clock import Clock, now
 from lib.mail import send as deliver
 from lib.util import helper
+from lib.lang import languages
 import lib.store
 
 
@@ -14,3 +15,12 @@ def notify(to):
 
 def save(key):
     lib.store.write(key, Clock().tick())
+
+
+def menu():
+    return languages()
+
+
+def launch():
+    from lib.jobs import start
+    return start()

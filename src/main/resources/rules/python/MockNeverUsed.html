@@ -2,7 +2,8 @@
 <code>Mock()</code> / <code>mocker.patch(...)</code> that the test never mentions again.</p>
 <h2>Why is this an issue?</h2>
 <p>The test does not check how the code used the patched dependency, and a created mock nobody receives is dead code.
-When the patch only stubs a side effect, name the argument with a leading underscore to say so.</p>
+When the patch only stubs a side effect, name the argument with a leading underscore to say so. A patch
+given <code>return_value=</code> or <code>side_effect=</code> is taken as a stub on purpose.</p>
 <h2>Noncompliant code example</h2>
 <pre>
 @patch("app.mail")

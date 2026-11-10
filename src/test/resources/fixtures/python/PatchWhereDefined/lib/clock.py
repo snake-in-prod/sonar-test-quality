@@ -11,4 +11,4 @@ def now():
 
 
 def today():
-    return int(now() // 86400)
+    return int(time.time() // 86400)

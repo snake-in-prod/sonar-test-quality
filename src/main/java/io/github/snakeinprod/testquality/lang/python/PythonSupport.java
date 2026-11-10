@@ -23,6 +23,8 @@ public class PythonSupport implements LanguageSupport {
 
   private static final Pattern SKIP = Pattern.compile("pytest\\.mark\\.(skip|skipif|xfail)|unittest\\.(skip\\w*|expectedFailure)");
   private static final Pattern PATCH = Pattern.compile("(unittest\\.)?(mock\\.|mocker\\.)?patch(\\.(object|dict|multiple))?");
+  private static final Set<String> HELPER_DECORATORS = Set.of("pytest.fixture", "contextlib.contextmanager",
+    "contextlib.asynccontextmanager");
   private static final Set<String> MOCK_CLASSES = Set.of("Mock", "MagicMock", "AsyncMock");
 
   @Override
@@ -116,15 +118,18 @@ public class PythonSupport implements LanguageSupport {
     return new TestCase(def.name(), suite, def.nameToken(), start, def.last(), def, skipped, def.isAsync(), assertions, mocks);
   }
 
-  /** A def named test* that is not a {@code @pytest.fixture} (a fixture named {@code test_app} is not collected). */
+  /**
+   * A def named test* that is not a {@code @pytest.fixture} (a fixture named {@code test_app} is not collected) or a
+   * {@code @contextmanager} helper such as {@code test_server_running()}.
+   */
   private static boolean isTestDef(PyModule m, PyStatement s) {
     return s.keyword().equals("def") && s.name() != null && s.name().startsWith("test")
-      && s.decorators().stream().noneMatch(d -> isFixture(m, d));
+      && s.decorators().stream().noneMatch(d -> isHelperDecorator(m, d));
   }
 
-  private static boolean isFixture(PyModule m, PyStatement decorator) {
+  private static boolean isHelperDecorator(PyModule m, PyStatement decorator) {
     List<Chain> chains = Chains.direct(decorator.group());
-    return !chains.isEmpty() && m.resolve(String.join(".", head(chains.get(0)))).equals("pytest.fixture");
+    return !chains.isEmpty() && HELPER_DECORATORS.contains(m.resolve(String.join(".", head(chains.get(0)))));
   }
 
   /** {@code self.assert*(...)}, {@code self.fail(...)}, {@code pytest.raises(...)}, {@code pytest.warns(...)}, {@code m.assert_*(...)}. */

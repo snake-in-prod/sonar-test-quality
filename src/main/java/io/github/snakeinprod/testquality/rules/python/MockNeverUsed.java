@@ -16,14 +16,19 @@ import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Pattern;
 
-/** A patched or created mock that the test neither passes on nor asserts on. */
+/**
+ * A patched or created mock that the test neither passes on nor asserts on. A patch given {@code return_value=} or
+ * {@code side_effect=} is a stub on purpose, and so is a name starting with "_", "unused" or "ignored".
+ */
 public class MockNeverUsed implements TestRule {
 
   static final Set<String> KEYWORDS = Chains.keywords("py");
   private static final Set<String> PATCH = Set.of("patch", "mock.patch", "unittest.mock.patch", "mocker.patch");
   private static final Set<String> FACTORIES = Set.of("Mock", "MagicMock", "AsyncMock", "NonCallableMock", "NonCallableMagicMock",
     "create_autospec");
+  private static final Pattern INTENDED = Pattern.compile("_.*|(?i)(unused|ignored?)\\w*");
 
   @Override
   public void check(RuleContext ctx) {
@@ -58,6 +63,7 @@ public class MockNeverUsed implements TestRule {
   /** {@code @patch("a.b")} decorators: the bottom one passes the first argument after self. */
   private static void decorators(RuleContext ctx, PyModule m, PyStatement def, Use use) {
     List<PyStatement> injecting = new ArrayList<>();
+    Set<PyStatement> stubs = Collections.newSetFromMap(new IdentityHashMap<>());
     for (PyStatement d : def.decorators()) {
       Chain c = decorator(d);
       if (c == null) {
@@ -70,6 +76,9 @@ public class MockNeverUsed implements TestRule {
         }
         if (injects(kind, c.calls().get(0))) {
           injecting.add(d);
+          if (configured(c.calls().get(0))) {
+            stubs.add(d);
+          }
         }
       } else if (!m.resolve(c.path()).startsWith("pytest.mark.")) {
         // another decorator may pass arguments of its own
@@ -85,8 +94,8 @@ public class MockNeverUsed implements TestRule {
     }
     for (int k = 0; k < injecting.size(); k++) {
       PyStatement.Param p = params.get(k);
-      if (!p.name().startsWith("_") && !use.used(p.name(), p.token())) {
-        PyStatement d = injecting.get(injecting.size() - 1 - k);
+      PyStatement d = injecting.get(injecting.size() - 1 - k);
+      if (!stubs.contains(d) && !INTENDED.matcher(p.name()).matches() && !use.used(p.name(), p.token())) {
         String patch = code(d.nodes());
         ctx.report(p.token(), "The mock \"" + p.name() + "\" from " + patch + " is never used; assert on it, or rename it \"_"
           + p.name() + "\" if it only stubs the call.");
@@ -98,7 +107,7 @@ public class MockNeverUsed implements TestRule {
   private static void assigned(RuleContext ctx, PyModule m, PyStatement s, Use use) {
     List<Node> nodes = s.nodes();
     Token name = nodes.isEmpty() ? null : Nodes.leaf(nodes.get(0));
-    if (nodes.size() < 3 || name == null || name.kind() != TokenKind.IDENT || name.text().startsWith("_") || !Nodes.isLeaf(nodes.get(1), "=")) {
+    if (nodes.size() < 3 || name == null || name.kind() != TokenKind.IDENT || INTENDED.matcher(name.text()).matches() || !Nodes.isLeaf(nodes.get(1), "=")) {
       return;
     }
     Chain c = whole(nodes.subList(2, nodes.size()));
@@ -117,7 +126,7 @@ public class MockNeverUsed implements TestRule {
       return calls == 1;
     }
     String kind = patchKind(m, c);
-    if (kind == null || !injects(kind, c.calls().get(0))) {
+    if (kind == null || !injects(kind, c.calls().get(0)) || configured(c.calls().get(0))) {
       return false;
     }
     return head.get(0).equals("mocker") ? calls == 1 : calls == 2 && c.lastName().equals("start");
@@ -137,12 +146,13 @@ public class MockNeverUsed implements TestRule {
     for (List<Node> item : items) {
       int n = item.size();
       Token name = n >= 3 && Nodes.isIdent(item.get(n - 2), "as") ? Nodes.leaf(item.get(n - 1)) : null;
-      if (name == null || name.kind() != TokenKind.IDENT || name.text().startsWith("_")) {
+      if (name == null || name.kind() != TokenKind.IDENT || INTENDED.matcher(name.text()).matches()) {
         continue;
       }
       Chain c = whole(item.subList(0, n - 2));
       String kind = c == null ? null : patchKind(m, c);
-      if (kind != null && c.calls().size() == 1 && c.endsWithCall() && injects(kind, c.calls().get(0)) && !use.used(name.text(), name)) {
+      if (kind != null && c.calls().size() == 1 && c.endsWithCall() && injects(kind, c.calls().get(0)) && !configured(c.calls().get(0))
+        && !use.used(name.text(), name)) {
         ctx.report(name, "The mock \"" + name.text() + "\" bound by " + code(item.subList(0, n - 2))
           + " is never used; assert on it, or drop \"as " + name.text() + "\" if it only stubs the call.");
       }
@@ -189,6 +199,12 @@ public class MockNeverUsed implements TestRule {
       }
     }
     return positional == (kind.equals("patch") ? 1 : 2);
+  }
+
+  /** The patch sets {@code return_value=} or {@code side_effect=}: the test relies on the stub, not on asserting it. */
+  private static boolean configured(Chain.Call call) {
+    return call.items().stream().anyMatch(item -> item.size() > 1 && Nodes.isLeaf(item.get(1), "=")
+      && (Nodes.isIdent(item.get(0), "return_value") || Nodes.isIdent(item.get(0), "side_effect")));
   }
 
   /** The names before the first call: "mock.patch.object" for {@code mock.patch.object(A, "b").start()}. */
