@@ -98,9 +98,10 @@ A policy rule in each repository (`testquality-python`, `testquality-js`, `testq
 issue on the first function of a source file that defines at least 3 functions or methods and that no test reaches
 (see Test reach below). Activate it in your profile when every module should have tests.
 
-Every rule was run on public projects before release (psf/requests, pallets/flask, encode/httpx, pallets/click,
-pytest-dev/pytest-mock, vercel/swr, pmndrs/zustand, testing-library/react-testing-library, felangel/bloc,
-rrousselGit/riverpod, flutter/samples): 41 issues, all of them real test defects after the fixes made during the review.
+Every rule was run on public projects before release, every issue reviewed by hand and every false positive pattern
+fixed: libraries (psf/requests, pallets/flask, encode/httpx, pallets/click, pytest-dev/pytest-mock, vercel/swr,
+pmndrs/zustand, testing-library/react-testing-library, felangel/bloc, rrousselGit/riverpod, flutter/samples) and
+applications (netbox, saleor, zulip, excalidraw, cal.com, documenso, flutter/gallery, immich, lichess mobile).
 
 ## Metrics
 
