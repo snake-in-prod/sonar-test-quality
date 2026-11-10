@@ -1,0 +1,20 @@
+<p><code>expectLater</code> returns a future that completes when the matcher has checked the value. A widget test runs
+in a fake-async zone and tears the widget tree down when its body returns, so an <code>expectLater</code> called as a
+statement without <code>await</code> (a golden comparison, a stream or future matcher) may check after the test has
+ended, against a tree that is gone, or not at all. Only widget tests are checked: a plain <code>test</code> waits for
+an async matcher on its own, and subscribing with <code>expectLater</code> before adding events is the usual way to
+test a stream there.</p>
+<h2>Noncompliant code example</h2>
+<pre>
+testWidgets('home page', (tester) async {
+  await tester.pumpWidget(const App());
+  expectLater(find.byType(App), matchesGoldenFile('home.png')); // Noncompliant
+});
+</pre>
+<h2>Compliant solution</h2>
+<pre>
+testWidgets('home page', (tester) async {
+  await tester.pumpWidget(const App());
+  await expectLater(find.byType(App), matchesGoldenFile('home.png'));
+});
+</pre>

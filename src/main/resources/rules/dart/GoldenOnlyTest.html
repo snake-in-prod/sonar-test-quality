@@ -1,0 +1,18 @@
+<p>A widget test whose only check is <code>matchesGoldenFile</code> fails with a pixel diff that does not say what broke,
+and checks nothing on the platforms where goldens are skipped or regenerated. Add at least one expectation on what the
+widget shows. Tests that pass the tester to a local helper are left alone, since the helper may hold those checks.</p>
+<h2>Noncompliant code example</h2>
+<pre>
+testWidgets('home screen', (tester) async {
+  await tester.pumpWidget(const App());
+  await expectLater(find.byType(App), matchesGoldenFile('home.png')); // Noncompliant
+});
+</pre>
+<h2>Compliant solution</h2>
+<pre>
+testWidgets('home screen', (tester) async {
+  await tester.pumpWidget(const App());
+  expect(find.text('Welcome'), findsOneWidget);
+  await expectLater(find.byType(App), matchesGoldenFile('home.png'));
+});
+</pre>
