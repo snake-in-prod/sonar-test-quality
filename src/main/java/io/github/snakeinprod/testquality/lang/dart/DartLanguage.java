@@ -8,7 +8,7 @@ import org.sonar.api.resources.AbstractLanguage;
 /**
  * The "dart" language, so that .dart files are indexed and can carry issues. SonarQube Community Build has no Dart
  * language of its own. When another plugin already claims .dart (a community Flutter plugin), set
- * {@code sonar.testquality.dart.file.suffixes} to an empty value; two languages cannot share a suffix.
+ * {@code sonar.dart.file.suffixes} to an empty value; two languages cannot share a suffix.
  */
 public class DartLanguage extends AbstractLanguage {
 

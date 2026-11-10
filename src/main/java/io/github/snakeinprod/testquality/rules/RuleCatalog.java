@@ -70,7 +70,7 @@ public final class RuleCatalog {
       "time.sleep in a test makes it slow, and flaky when it waits for something.",
       "time.sleep(2)  # Noncompliant", io.github.snakeinprod.testquality.rules.python.SleepInTest::new),
     spec("python", "UnseededRandom", "MINOR", false, "Random values in tests should be seeded",
-      "random or uuid4 values feeding an assertion without a fixed seed make the test flaky.",
+      "random values feeding an assertion without a fixed seed make the test flaky.",
       "assert f(random.randint(1, 9)) > 0  # Noncompliant", io.github.snakeinprod.testquality.rules.python.UnseededRandom::new),
     spec("python", "ComparisonWithoutAssert", "MAJOR", true, "Comparisons in tests should be asserted",
       "A comparison statement whose result is dropped checks nothing.",

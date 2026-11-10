@@ -14,7 +14,7 @@ import org.sonar.api.config.PropertyDefinition;
 public class TestQualityPlugin implements Plugin {
 
   public static final String CATEGORY = "Test Quality";
-  public static final String DART_SUFFIXES = "sonar.testquality.dart.file.suffixes";
+  public static final String DART_SUFFIXES = "sonar.dart.file.suffixes";
   public static final String MUTATION_REPORTS = "sonar.testquality.mutation.reportPaths";
   public static final String JUNIT_REPORTS = "sonar.testquality.junit.reportPaths";
   public static final String DART_REPORTS = "sonar.testquality.dart.reportPaths";
