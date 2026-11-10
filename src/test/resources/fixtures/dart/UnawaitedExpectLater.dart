@@ -3,13 +3,13 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('stream emits', () {
+  testWidgets('stream emits', (tester) async {
     final controller = StreamController<int>();
     expectLater(controller.stream, emits(1)); // Noncompliant {{"expectLater(...)" is not awaited}}
     controller.add(1);
   });
 
-  test('async test forgets await', () async {
+  testWidgets('async test forgets await', (tester) async {
     expectLater(load(), completion(isNotEmpty)); // Noncompliant
   });
 
@@ -22,7 +22,7 @@ void main() {
   });
 
   group('nested blocks', () {
-    test('inside if', () async {
+    testWidgets('inside if', (tester) async {
       if (enabled) {
         expectLater(load(), completes); // Noncompliant
       } else {
@@ -30,7 +30,7 @@ void main() {
       }
     });
 
-    test('inside try and for', () async {
+    testWidgets('inside try and for', (tester) async {
       for (final s in streams) {
         expectLater(s, emitsDone); // Noncompliant
       }
@@ -44,42 +44,55 @@ void main() {
 
   // compliant
 
-  test('awaited', () async {
+  // package:test keeps a plain test alive until expectLater settles: subscribe first, then add events
+  test('plain test subscribes before adding events', () {
+    final controller = StreamController<int>();
+    expectLater(controller.stream, emitsInOrder([1, emitsDone]));
+    controller
+      ..add(1)
+      ..close();
+  });
+
+  test('plain async test', () async {
+    expectLater(load(), completion(isNotEmpty));
+  });
+
+  testWidgets('awaited', (tester) async {
     await expectLater(load(), completion(isNotEmpty));
   });
 
-  test('returned', () {
+  testWidgets('returned', (tester) {
     return expectLater(load(), completes);
   });
 
-  test('arrow body', () => expectLater(load(), completes));
+  testWidgets('arrow body', (tester) => expectLater(load(), completes));
 
-  test('kept in a future and awaited later', () async {
+  testWidgets('kept in a future and awaited later', (tester) async {
     final check = expectLater(stream, emitsInOrder([1, 2]));
     push(1);
     push(2);
     await check;
   });
 
-  test('explicitly unawaited', () {
+  testWidgets('explicitly unawaited', (tester) async {
     unawaited(expectLater(stream, emits(1)));
   });
 
-  test('collected', () async {
+  testWidgets('collected', (tester) async {
     await Future.wait([expectLater(a, emits(1)), expectLater(b, emits(2))]);
   });
 
-  test('inside a callback', () async {
+  testWidgets('inside a callback', (tester) async {
     await run(() async {
       expectLater(stream, emits(1));
     });
   });
 
-  test('sync expect', () {
+  testWidgets('sync expect', (tester) async {
     expect(value, 1);
   });
 
-  test('chained', () async {
+  testWidgets('chained', (tester) async {
     expectLater(stream, emits(1)).then((_) => done());
   });
 

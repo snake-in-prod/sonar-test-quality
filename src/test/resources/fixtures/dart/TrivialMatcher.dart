@@ -30,7 +30,7 @@ void main() {
 
   test('compared with itself', () async {
     final user = await repo.load();
-    expect(user.name, user.name); // Noncompliant {{compared with itself}}
+    expect(user, user); // Noncompliant {{compared with itself}}
     await expectLater(user, equals(user)); // Noncompliant
   });
 
@@ -66,6 +66,21 @@ void main() {
     expect(rng.next(), equals(rng.next()));
     expect(list[0], list[0]);
     expect(double.nan, double.nan);
+  });
+
+  test('a getter may build a new object on each read', () {
+    final a = FutureProvider((ref) => 0);
+    expect(a.future, a.future);
+    expect(a.future.hashCode, a.future.hashCode);
+    expect(provider.dependencies, same(provider.dependencies));
+    expect(user.name, user.name);
+  });
+
+  test('overrides ==/hashCode', () {
+    final mut = Mutation<int>();
+    final other = Mutation<int>();
+    expect(mut, mut);
+    expect(mut, isNot(other));
   });
 
   test('not an expect', () {

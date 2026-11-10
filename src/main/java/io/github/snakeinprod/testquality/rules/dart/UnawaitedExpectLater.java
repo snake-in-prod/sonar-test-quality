@@ -10,7 +10,11 @@ import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
 
-/** expectLater returns a future; not awaited, the test ends before it checks. */
+/**
+ * expectLater as a statement, not awaited, in a widget test. Only widget tests are checked: package:test keeps a plain
+ * test alive until the matcher settles (and the bloc idiom subscribes with expectLater before adding events), while a
+ * widget test runs in fake async and tears the tree down when the body returns.
+ */
 public class UnawaitedExpectLater implements TestRule {
 
   private static final Set<String> CONTROL = Set.of("if", "for", "while", "do", "try");
@@ -19,13 +23,13 @@ public class UnawaitedExpectLater implements TestRule {
   public void check(RuleContext ctx) {
     for (TestCase t : ctx.tests().tests()) {
       Node.Group body = t.bodyGroup();
-      if (body == null || !body.is("{")) {
+      if (body == null || !body.is("{") || t.start().is("test")) {
         continue;
       }
       statements(body, s -> {
         if (s.size() == 2 && Nodes.isIdent(s.get(0), "expectLater") && s.get(1) instanceof Node.Group args && args.is("(")) {
           ctx.report(s.get(0).first(), args.last(),
-            "\"expectLater(...)\" is not awaited, so the test can end before it checks; add \"await\" before it.");
+            "\"expectLater(...)\" is not awaited, so this widget test can end before it checks; add \"await\" before it.");
         }
       });
     }

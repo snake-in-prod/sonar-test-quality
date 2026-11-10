@@ -15,7 +15,9 @@ import java.util.Set;
 
 /**
  * A matcher that cannot fail on the value: {@code anything}, {@code isA<dynamic>()}, {@code isNotNull} on a finder or a
- * constructor call, a literal checked against itself ({@code expect(true, isTrue)}), a value compared with itself.
+ * constructor call, a literal checked against itself ({@code expect(true, isTrue)}), a variable compared with itself.
+ * A getter compared with itself ({@code expect(a.future, a.future)}) may build a new object on each read, and a variable
+ * compared with itself in a test that also uses {@code isNot} checks the == contract, so both stay silent.
  */
 public class TrivialMatcher implements TestRule {
 
@@ -29,6 +31,7 @@ public class TrivialMatcher implements TestRule {
       if (body == null) {
         continue;
       }
+      boolean equalityContract = Nodes.tokens(body.children()).stream().anyMatch(tok -> tok.isIdent("isNot"));
       for (Chain c : Chains.in(body, Chains.keywords("dart"))) {
         if (c.segments().size() != 2 || !(c.firstName().equals("expect") || c.firstName().equals("expectLater")) || c.callAfter(0) == null) {
           continue;
@@ -37,7 +40,7 @@ public class TrivialMatcher implements TestRule {
         if (pos.size() != 2) {
           continue;
         }
-        String message = message(pos.get(0), pos.get(1));
+        String message = message(pos.get(0), pos.get(1), equalityContract);
         if (message != null) {
           ctx.report(pos.get(1).get(0).first(), pos.get(1).get(pos.get(1).size() - 1).last(), message);
         }
@@ -45,7 +48,7 @@ public class TrivialMatcher implements TestRule {
     }
   }
 
-  private static String message(List<Node> actual, List<Node> matcher) {
+  private static String message(List<Node> actual, List<Node> matcher, boolean equalityContract) {
     String m = compact(matcher);
     String a = compact(actual);
     if (MATCH_ALL.contains(m)) {
@@ -65,7 +68,7 @@ public class TrivialMatcher implements TestRule {
       return "\"" + a + "\" is a constant, so \"" + m + "\" cannot fail; check a value produced by the code under test.";
     }
     String inner = equalityOperand(matcher);
-    if (isPlainPath(actual) && (a.equals(m) || a.equals(inner))) {
+    if (!equalityContract && isVariable(actual) && (a.equals(m) || a.equals(inner))) {
       return "\"" + a + "\" is compared with itself, so this expect cannot fail; compare it with the expected value.";
     }
     return null;
@@ -128,9 +131,9 @@ public class TrivialMatcher implements TestRule {
     return "";
   }
 
-  /** {@code a} or {@code a.b.c}: names only, no calls or indexes, so reading it twice gives the same value. */
-  private static boolean isPlainPath(List<Node> actual) {
-    Chain c = whole(actual);
-    return c != null && c.segments().stream().allMatch(s -> s instanceof Chain.Name n && !n.accessor().equals("..")) && !c.names().contains("nan");
+  /** A bare name such as {@code user}: reading it twice gives the same object. */
+  private static boolean isVariable(List<Node> actual) {
+    Token t = actual.size() == 1 ? Nodes.leaf(actual.get(0)) : null;
+    return t != null && t.kind() == TokenKind.IDENT && !t.text().equals("nan");
   }
 }
