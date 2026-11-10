@@ -1,0 +1,18 @@
+<p>A <code>jest.fn()</code> or <code>vi.fn()</code> stored in a variable and passed to the code under test, but never
+asserted on.</p>
+<h2>Why is this an issue?</h2>
+<p>Naming a mock and handing it to the component usually means the test meant to check that it is called. Without an
+assertion the test passes even when the callback is never called or is called with the wrong arguments.</p>
+<h2>Noncompliant code example</h2>
+<pre>
+const onSave = jest.fn(); // Noncompliant
+render(&lt;Form onSave={onSave} /&gt;);
+await user.click(screen.getByRole('button'));
+</pre>
+<h2>Compliant solution</h2>
+<pre>
+const onSave = jest.fn();
+render(&lt;Form onSave={onSave} /&gt;);
+await user.click(screen.getByRole('button'));
+expect(onSave).toHaveBeenCalledWith({ name: 'Ann' });
+</pre>
