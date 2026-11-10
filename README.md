@@ -8,7 +8,11 @@ Finds tests that pass while they check nothing, and measures how good a test sui
 - **Production code checks**: which source files no test imports (test reach), as metrics and as an optional rule.
 - **Test quality metrics**: tests, assertions per test, tests without assertions, mocks, mock-heavy and skipped tests,
   and from reports the mutation score, the slowest tests (p95) and flaky tests; new code variants for quality gates.
-- **A Test Quality page** per project, and a ready-made "Test Quality" quality gate (installed by a script).
+- **Test reach** of production code: source files that no test imports, and an optional rule for them.
+- **A Test Quality page** per project (trends, mutants, test health, test reach, gate conditions, hot spots, slowest
+  tests), and a ready-made "Test Quality" quality gate (installed by a script).
+
+  ![Test Quality page](docs/images/test-quality-page.png)
 
 The built-in Python and JavaScript analyzers' own test rules (an assert on a tuple, exclusive tests, tests without
 assertions) are not repeated. SonarQube has no Dart analyzer; this plugin brings a `dart` language for test files.
