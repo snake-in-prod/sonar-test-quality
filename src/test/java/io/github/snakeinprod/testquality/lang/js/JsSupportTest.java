@@ -12,6 +12,10 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 
 class JsSupportTest {
@@ -25,6 +29,24 @@ class JsSupportTest {
 
   private List<TestCase> tests(String name) throws IOException {
     return support.extract(parse(name)).tests();
+  }
+
+  @Test
+  void imported_wrappers_are_test_functions() throws IOException {
+    Path root = Path.of("src/test/resources/model/js/wrappers");
+    Set<String> paths = paths(root, ".ts");
+    Function<String, String> read = reader(root);
+    ParsedFile file = support.parse("users.test.ts", "ts", read.apply("users.test.ts"));
+    assertThat(support.extract(file)).isSameAs(TestFile.EMPTY);
+    // named, default, and re-exported under another name; not through a namespace import
+    List<TestCase> tests = support.extract(file, paths, read).tests();
+    assertThat(tests).extracting(TestCase::name, TestCase::suite, TestCase::async, TestCase::assertions).containsExactly(
+      tuple("sees the profile", "users", true, 1),
+      tuple("renames", "users", true, 2),
+      tuple("deletes", "users", false, 1));
+    assertThat(tests).extracting(t -> t.start().text()).containsExactly("itWithUser", "withUser", "itAsAdmin");
+    ParsedFile helper = support.parse("helpers/users.ts", "ts", read.apply("helpers/users.ts"));
+    assertThat(support.extract(helper, paths, read)).isSameAs(TestFile.EMPTY);
   }
 
   @Test
@@ -132,5 +154,23 @@ class JsSupportTest {
     assertThat(fns).extracting(JsTrees.Fn::async, JsTrees.Fn::expression, JsTrees.Fn::paramCount)
       .containsExactly(tuple(true, true, 1), tuple(false, false, 1), tuple(true, false, 2), tuple(false, true, 1), tuple(true, false, 0));
     assertThat(fns.get(3).simpleParams()).extracting(t -> t.text()).containsExactly("done");
+  }
+
+  /** The project files of a model directory by extension, and a reader of them. */
+  static Set<String> paths(Path root, String extension) throws IOException {
+    try (Stream<Path> s = Files.walk(root)) {
+      return s.filter(p -> p.toString().endsWith(extension)).map(p -> root.relativize(p).toString().replace('\\', '/'))
+        .collect(Collectors.toSet());
+    }
+  }
+
+  static Function<String, String> reader(Path root) {
+    return p -> {
+      try {
+        return Files.readString(root.resolve(p));
+      } catch (IOException e) {
+        return null;
+      }
+    };
   }
 }

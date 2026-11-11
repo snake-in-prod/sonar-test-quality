@@ -23,7 +23,7 @@ public class UnawaitedExpectLater implements TestRule {
 
   @Override
   public void check(RuleContext ctx) {
-    Map<String, DartSupport.TestFunction> fns = DartSupport.testFunctions(ctx.file().root());
+    Map<String, DartSupport.TestFunction> fns = DartSupport.testFunctions(ctx.file());
     for (TestCase t : ctx.tests().tests()) {
       Node.Group body = t.bodyGroup();
       if (body == null || !body.is("{") || DartSupport.calls(fns, t, "test")) {

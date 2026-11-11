@@ -28,6 +28,16 @@ public interface LanguageSupport {
   TestFile extract(ParsedFile file);
 
   /**
+   * Finds the tests of a parsed file, calls of test wrappers it imports from other project files included.
+   *
+   * @param paths every project file of this language family, relative to the base directory
+   * @param read  content of any file under the base directory, or null
+   */
+  default TestFile extract(ParsedFile file, Set<String> paths, Function<String, String> read) {
+    return extract(file);
+  }
+
+  /**
    * The project files a parsed file imports and what it declares.
    *
    * @param paths every project file of this language family, relative to the base directory

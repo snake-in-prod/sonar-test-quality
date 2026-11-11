@@ -54,7 +54,7 @@ public class UnawaitedTesterAction implements TestRule {
    */
   static Map<Node.Group, Token> testers(ParsedFile file) {
     Map<Node.Group, Token> out = new IdentityHashMap<>();
-    Map<String, DartSupport.TestFunction> fns = DartSupport.testFunctions(file.root());
+    Map<String, DartSupport.TestFunction> fns = DartSupport.testFunctions(file);
     Nodes.groups(file.root(), g -> {
       List<Node> kids = g.children();
       for (int i = 0; i + 1 < kids.size(); i++) {

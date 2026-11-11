@@ -56,9 +56,62 @@ public class DartSupport implements LanguageSupport {
   @Override
   public TestFile extract(ParsedFile file) {
     List<TestCase> out = new ArrayList<>();
-    walk(file.root(), "", false, DartTrees.imports(file.root(), "bloc_test"), mockClasses(file.root()), testFunctions(file.root()),
-      out);
+    walk(file.root(), "", false, DartTrees.imports(file.root(), "bloc_test"), mockClasses(file.root()), testFunctions(file), out);
     return out.isEmpty() ? TestFile.EMPTY : new TestFile(List.copyOf(out));
+  }
+
+  /**
+   * Also the calls of wrappers declared in the project files the file imports, or in the files those export (one
+   * level). A wrapper of the file itself wins over an imported one of the same name.
+   */
+  @Override
+  public TestFile extract(ParsedFile file, Set<String> paths, Function<String, String> read) {
+    Map<String, TestFunction> imported = new HashMap<>();
+    for (String p : directives(file, paths, read, Set.of("import"))) {
+      Module m = module(p, paths, read);
+      m.wrappers().forEach(imported::putIfAbsent);
+      for (String e : m.exports()) {
+        module(e, paths, read).wrappers().forEach(imported::putIfAbsent);
+      }
+    }
+    if (!imported.isEmpty()) {
+      file.put(Imported.class, new Imported(imported));
+    }
+    return extract(file);
+  }
+
+  /** The wrappers a test file imports, attached to it by {@link #extract(ParsedFile, Set, Function)}. */
+  private record Imported(Map<String, TestFunction> functions) {
+  }
+
+  /** The wrappers a project file declares and the project files it exports. */
+  private record Module(Map<String, TestFunction> wrappers, List<String> exports) {
+  }
+
+  private static final Module NO_MODULE = new Module(Map.of(), List.of());
+  /** A file without a framework test call or an export declares and exports no wrapper: it is not parsed. */
+  private static final Pattern WRAPPER_HINT = Pattern.compile("\\b(test|testWidgets|testGoldens)\\s*\\(|\\bexport\\s");
+  private final Map<String, Module> modules = new HashMap<>();
+
+  /** A project file's wrappers and exports, indexed once per analysis. */
+  private Module module(String path, Set<String> paths, Function<String, String> read) {
+    Module m = modules.get(path);
+    if (m == null) {
+      String source = read.apply(path);
+      m = NO_MODULE;
+      if (source != null && WRAPPER_HINT.matcher(source).find()) {
+        try {
+          ParsedFile f = parse(path, "dart", source);
+          Map<String, TestFunction> wrappers = new HashMap<>(testFunctions(f.root()));
+          wrappers.values().removeIf(w -> w.inner() == null);
+          m = new Module(wrappers, directives(f, paths, read, Set.of("export")));
+        } catch (RuntimeException e) {
+          // an unparsable file declares no wrapper
+        }
+      }
+      modules.put(path, m);
+    }
+    return m;
   }
 
   /**
@@ -67,11 +120,20 @@ public class DartSupport implements LanguageSupport {
    */
   @Override
   public Outline outline(ParsedFile file, Set<String> paths, Function<String, String> read) {
-    Set<String> imports = new TreeSet<>();
+    Set<String> imports = new TreeSet<>(directives(file, paths, read, Set.of("import", "export", "part")));
+    List<Token> functions = new ArrayList<>();
+    List<Token> classes = new ArrayList<>();
+    declarations(file.root(), functions, classes);
+    return new Outline(imports, functions, classes);
+  }
+
+  /** The project files the directives of these kinds name, see {@link #outline}. */
+  private List<String> directives(ParsedFile file, Set<String> paths, Function<String, String> read, Set<String> kinds) {
+    List<String> out = new ArrayList<>();
     List<Token> t = file.tokens();
     for (int i = 1; i < t.size(); i++) {
       Token p = t.get(i - 1);
-      if (t.get(i).kind() == TokenKind.STRING && (p.isIdent("import") || p.isIdent("export") || p.isIdent("part"))) {
+      if (t.get(i).kind() == TokenKind.STRING && p.kind() == TokenKind.IDENT && kinds.contains(p.text())) {
         String uri = DartTrees.stringValue(t.get(i));
         String r;
         if (uri.startsWith("package:") && uri.indexOf('/') > 0) {
@@ -81,14 +143,11 @@ public class DartSupport implements LanguageSupport {
           r = uri.contains(":") ? null : Outline.join(Outline.dir(file.path()), uri);
         }
         if (r != null && paths.contains(r) && !r.equals(file.path())) {
-          imports.add(r);
+          out.add(r);
         }
       }
     }
-    List<Token> functions = new ArrayList<>();
-    List<Token> classes = new ArrayList<>();
-    declarations(file.root(), functions, classes);
-    return new Outline(imports, functions, classes);
+    return out;
   }
 
   /** Package name to its directory ("" or "a/b/"): every directory holding a lib/ with dart files and a pubspec.yaml. */
@@ -170,7 +229,7 @@ public class DartSupport implements LanguageSupport {
       TestFunction fn = t == null || t.kind() != TokenKind.IDENT ? null : fns.get(t.text());
       if (t != null && t.kind() == TokenKind.IDENT && (fn != null || t.is("group") || bloc) && isCall(kids, i, a)) {
         Node.Group args = (Node.Group) kids.get(a);
-        if (fn != null && fns.values().stream().anyMatch(w -> t.equals(w.inner()))) {
+        if (fn != null && fns.values().stream().anyMatch(w -> t == w.inner())) {
           // the wrapper's own call: the wrapper's callers are the tests
           i = a;
           continue;
@@ -217,9 +276,20 @@ public class DartSupport implements LanguageSupport {
    * @param name     index of the positional argument holding the test name
    * @param body     index of the positional argument holding the test body
    * @param tester   index of the body's parameter that gets the WidgetTester, -1 when unknown
-   * @param inner    the wrapper's call of the framework function, null for the framework functions
+   * @param inner    the wrapper's call of the framework function, null for the framework functions; compared by identity,
+   *                 so a wrapper imported from another file never matches a token of this one
    */
   public record TestFunction(String function, int name, int body, int tester, Token inner) {
+  }
+
+  /** The framework test functions and the wrappers declared in the file or imported into it, by name. */
+  public static Map<String, TestFunction> testFunctions(ParsedFile file) {
+    Map<String, TestFunction> out = testFunctions(file.root());
+    Imported imported = file.get(Imported.class);
+    if (imported != null) {
+      imported.functions().forEach(out::putIfAbsent);
+    }
+    return out;
   }
 
   /** The framework test functions and the wrappers declared in the file, by name. */

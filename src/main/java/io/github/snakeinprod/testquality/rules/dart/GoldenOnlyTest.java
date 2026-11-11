@@ -24,7 +24,7 @@ public class GoldenOnlyTest implements TestRule {
 
   @Override
   public void check(RuleContext ctx) {
-    Map<String, DartSupport.TestFunction> fns = DartSupport.testFunctions(ctx.file().root());
+    Map<String, DartSupport.TestFunction> fns = DartSupport.testFunctions(ctx.file());
     for (TestCase t : ctx.tests().tests()) {
       Node.Group body = t.bodyGroup();
       if (body == null || !DartSupport.calls(fns, t, "testWidgets")) {

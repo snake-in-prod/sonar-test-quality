@@ -14,6 +14,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 
 class DartSupportTest {
@@ -61,6 +65,28 @@ class DartSupportTest {
       DartSupport.TestFunction::body, DartSupport.TestFunction::tester).containsExactly("testWidgets", 0, 1, 0);
     assertThat(fns.get("unitTest").function()).isEqualTo("test");
     assertThat(fns).doesNotContainKey("check");
+  }
+
+  @Test
+  void imported_wrappers_are_test_functions() throws IOException {
+    Path root = Path.of("src/test/resources/model/dart/wrappers");
+    Set<String> paths = paths(root, ".dart");
+    Function<String, String> read = reader(root);
+    ParsedFile login = support.parse("integration_test/login_test.dart", "dart", read.apply("integration_test/login_test.dart"));
+    assertThat(support.extract(login)).isSameAs(TestFile.EMPTY);
+    TestFile f = support.extract(login, paths, read);
+    assertThat(f.tests()).extracting(TestCase::name, TestCase::suite, TestCase::async, TestCase::assertions).containsExactly(
+      tuple("logs in", "login", true, 1),
+      tuple("rejects a wrong password", "login", true, 2),
+      tuple("validates the email", "", false, 1));
+    assertThat(f.tests()).extracting(t -> t.start().text()).containsExactly("appWidgetTest", "appWidgetTest", "unitTest");
+    // relative import, and package:app/testing.dart exporting lib/src/unit.dart
+    Map<String, DartSupport.TestFunction> fns = DartSupport.testFunctions(login);
+    assertThat(fns.get("appWidgetTest")).extracting(DartSupport.TestFunction::function, DartSupport.TestFunction::name,
+      DartSupport.TestFunction::body, DartSupport.TestFunction::tester).containsExactly("testWidgets", 0, 1, 0);
+    assertThat(fns.get("unitTest").function()).isEqualTo("test");
+    String helper = "integration_test/test_utils/general_helper.dart";
+    assertThat(support.extract(support.parse(helper, "dart", read.apply(helper)), paths, read)).isSameAs(TestFile.EMPTY);
   }
 
   @Test
@@ -158,5 +184,23 @@ class DartSupportTest {
     assertThat(DartTrees.stringValue(parse("'''x'''").tokens().get(0))).isEqualTo("x");
     assertThat(DartTrees.stringValue(parse("''").tokens().get(0))).isEmpty();
     assertThat(DartTrees.stringValue(parse("'abc").tokens().get(0))).isEqualTo("abc");
+  }
+
+  /** The project files of a model directory by extension, and a reader of them. */
+  static Set<String> paths(Path root, String extension) throws IOException {
+    try (Stream<Path> s = Files.walk(root)) {
+      return s.filter(p -> p.toString().endsWith(extension)).map(p -> root.relativize(p).toString().replace('\\', '/'))
+        .collect(Collectors.toSet());
+    }
+  }
+
+  static Function<String, String> reader(Path root) {
+    return p -> {
+      try {
+        return Files.readString(root.resolve(p));
+      } catch (IOException e) {
+        return null;
+      }
+    };
   }
 }

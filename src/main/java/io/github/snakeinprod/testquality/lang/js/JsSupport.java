@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 
 /**
  * Parsing and test extraction for JavaScript and TypeScript (JSX / TSX included): Jest, Vitest, Mocha, Jasmine and
@@ -57,9 +58,171 @@ public class JsSupport implements LanguageSupport {
 
   @Override
   public TestFile extract(ParsedFile file) {
+    return extract(file, Map.of());
+  }
+
+  /**
+   * Also the calls of wrappers imported from other project files: {@code import { a, b as c } from 'x'} and
+   * {@code import d from 'x'} (its {@code export default}) of the paths {@link #outline} resolves, the imported file's own
+   * wrappers or those it re-exports from one more file ({@code export { a } from 'y'}, {@code export * from 'y'}).
+   * Namespace imports and {@code require} are not followed. A wrapper of the file itself wins over an imported one.
+   */
+  @Override
+  public TestFile extract(ParsedFile file, Set<String> paths, Function<String, String> read) {
+    Map<String, Wrapper> imported = new HashMap<>();
+    List<Token> t = file.tokens();
+    for (int i = 0; i < t.size(); i++) {
+      Clause c = t.get(i).isIdent("import") && (i == 0 || !t.get(i - 1).is(".")) ? clause(t, i + 1) : null;
+      String p = c == null || c.names() == null ? null : resolve(file.path(), c.spec(), paths, read);
+      if (p != null) {
+        Map<String, Wrapper> exported = exported(p, paths, read);
+        c.names().forEach((name, local) -> {
+          if (exported.containsKey(name)) {
+            imported.putIfAbsent(local, exported.get(name));
+          }
+        });
+      }
+    }
+    return extract(file, imported);
+  }
+
+  private TestFile extract(ParsedFile file, Map<String, Wrapper> imported) {
     List<TestCase> out = new ArrayList<>();
-    visit(file.root(), "", false, wrappers(file.root()), out);
+    Map<String, Wrapper> wrappers = wrappers(file.root());
+    imported.forEach(wrappers::putIfAbsent);
+    visit(file.root(), "", false, wrappers, out);
     return out.isEmpty() ? TestFile.EMPTY : new TestFile(List.copyOf(out));
+  }
+
+  /**
+   * The names of an import or re-export, from after {@code import} / {@code export} to {@code from 'spec'}: imported
+   * name ("default" for a default import) to local name, null for {@code export * from}.
+   */
+  private record Clause(Map<String, String> names, String spec) {
+  }
+
+  /** The clause from token {@code j}, null when the statement is not {@code [type] names from 'spec'}. */
+  private static Clause clause(List<Token> t, int j) {
+    Map<String, String> names = new HashMap<>();
+    boolean all = false;
+    if (is(t, j, "type") && (ident(t, j + 1) && !is(t, j + 1, "from") || is(t, j + 1, "{"))) {
+      j++;
+    }
+    while (true) {
+      if (is(t, j, "*")) {
+        all = !is(t, j + 1, "as");
+        j += all ? 1 : 3; // * as ns: calls through the namespace are not followed
+      } else if (is(t, j, "{")) {
+        for (j++; j < t.size() && !t.get(j).is("}"); j++) {
+          if (is(t, j, "type") && ident(t, j + 1) && !is(t, j + 1, "as")) {
+            j++;
+          }
+          if (ident(t, j)) {
+            boolean alias = is(t, j + 1, "as") && ident(t, j + 2);
+            names.put(t.get(j).text(), t.get(alias ? j + 2 : j).text());
+            j += alias ? 2 : 0;
+          } else if (!is(t, j, ",")) {
+            return null;
+          }
+        }
+        j++;
+      } else if (ident(t, j) && !is(t, j, "from")) {
+        names.put("default", t.get(j).text());
+        j++;
+      } else {
+        return null;
+      }
+      if (!is(t, j, ",")) {
+        break;
+      }
+      j++;
+    }
+    return is(t, j, "from") && j + 1 < t.size() && t.get(j + 1).kind() == TokenKind.STRING
+      ? new Clause(all ? null : names, unquote(t.get(j + 1).text())) : null;
+  }
+
+  private static boolean is(List<Token> t, int j, String text) {
+    return j < t.size() && t.get(j).is(text);
+  }
+
+  private static boolean ident(List<Token> t, int j) {
+    return j < t.size() && t.get(j).kind() == TokenKind.IDENT;
+  }
+
+  /** The wrappers a project file exports, its own and those re-exported from one more file. */
+  private Map<String, Wrapper> exported(String path, Set<String> paths, Function<String, String> read) {
+    Module m = module(path, paths, read);
+    if (m.reexports().isEmpty()) {
+      return m.wrappers();
+    }
+    Map<String, Wrapper> out = new HashMap<>(m.wrappers());
+    for (Clause c : m.reexports()) {
+      String p = resolve(path, c.spec(), paths, read);
+      Map<String, Wrapper> from = p == null ? Map.of() : module(p, paths, read).wrappers();
+      if (c.names() == null) {
+        from.forEach((name, w) -> {
+          if (!name.equals("default")) {
+            out.putIfAbsent(name, w);
+          }
+        });
+      } else {
+        c.names().forEach((name, local) -> {
+          if (from.containsKey(name)) {
+            out.putIfAbsent(local, from.get(name));
+          }
+        });
+      }
+    }
+    return out;
+  }
+
+  /** The wrappers a project file declares ("default" for its {@code export default}) and its re-exports. */
+  private record Module(Map<String, Wrapper> wrappers, List<Clause> reexports) {
+  }
+
+  private static final Module NO_MODULE = new Module(Map.of(), List.of());
+  /** A file without a test function call or an {@code export {} / export *} has no wrapper to export: it is not parsed. */
+  private static final Pattern WRAPPER_HINT = Pattern.compile("\\b(it|test|xit|fit|xtest|specify|xspecify)\\s*[.(]|\\bexport\\s*[*{]");
+  private final Map<String, Module> modules = new HashMap<>();
+
+  /** A project file's wrappers and re-exports, indexed once per analysis. */
+  private Module module(String path, Set<String> paths, Function<String, String> read) {
+    Module m = modules.get(path);
+    if (m == null) {
+      String source = read.apply(path);
+      m = NO_MODULE;
+      if (source != null && WRAPPER_HINT.matcher(source).find()) {
+        try {
+          ParsedFile f = parse(path, path.matches(".*\\.[cm]?tsx?$") ? "ts" : "js", source);
+          Map<String, Wrapper> wrappers = wrappers(f.root());
+          List<Clause> reexports = new ArrayList<>();
+          List<Token> t = f.tokens();
+          for (int i = 0; i + 2 < t.size(); i++) {
+            if (!t.get(i).isIdent("export")) {
+              continue;
+            }
+            if (t.get(i + 1).isIdent("default")) {
+              int k = i + 2 + (t.get(i + 2).isIdent("async") ? 1 : 0);
+              k += is(t, k, "function") ? 1 : 0;
+              Wrapper w = k < t.size() ? wrappers.get(t.get(k).text()) : null;
+              if (w != null) {
+                wrappers.put("default", w);
+              }
+            } else if (t.get(i + 1).is("*") || t.get(i + 1).is("{")) {
+              Clause c = clause(t, i + 1);
+              if (c != null) {
+                reexports.add(c);
+              }
+            }
+          }
+          m = new Module(wrappers, reexports);
+        } catch (RuntimeException e) {
+          // an unparsable file exports no wrapper
+        }
+      }
+      modules.put(path, m);
+    }
+    return m;
   }
 
   /**
@@ -77,8 +240,7 @@ public class JsSupport implements LanguageSupport {
       Token p = t.get(i - 1);
       if (t.get(i).kind() == TokenKind.STRING && (p.isIdent("from") || p.isIdent("import")
         || p.is("(") && i > 1 && (t.get(i - 2).isIdent("require") || t.get(i - 2).isIdent("import")))) {
-        String spec = unquote(t.get(i).text());
-        String r = spec.startsWith(".") || spec.startsWith("/") ? resolve(file.path(), spec, paths) : resolvePackage(spec, paths, read);
+        String r = resolve(file.path(), unquote(t.get(i).text()), paths, read);
         if (r != null && !r.equals(file.path())) {
           imports.add(r);
         }
@@ -88,6 +250,11 @@ public class JsSupport implements LanguageSupport {
     List<Token> classes = new ArrayList<>();
     declarations(file.root(), false, functions, classes);
     return new Outline(imports, functions, classes);
+  }
+
+  /** A relative, base-directory or workspace package path, see {@link #outline}. */
+  private String resolve(String from, String spec, Set<String> paths, Function<String, String> read) {
+    return spec.startsWith(".") || spec.startsWith("/") ? resolve(from, spec, paths) : resolvePackage(spec, paths, read);
   }
 
   private static String resolve(String from, String spec, Set<String> paths) {
@@ -292,7 +459,7 @@ public class JsSupport implements LanguageSupport {
     if (wrapper != null) {
       return wrapped(c, wrapper, ((Chain.Call) segs.get(k)).args(), suite, skipped, wrappers, out);
     }
-    if (wrappers.values().stream().anyMatch(w -> c.first().equals(w.inner()))) {
+    if (wrappers.values().stream().anyMatch(w -> c.first() == w.inner())) {
       // the wrapper's own call: the wrapper's callers are the tests
       return walkChain(c, suite, skipped, wrappers, out);
     }
@@ -364,7 +531,7 @@ public class JsSupport implements LanguageSupport {
    *
    * @param name  index of the parameter holding the test name
    * @param body  index of the parameter holding the test body
-   * @param inner the wrapper's call of the test function
+   * @param inner the wrapper's call of the test function, compared by identity: an imported wrapper's never matches here
    */
   private record Wrapper(int name, int body, Token inner) {
   }

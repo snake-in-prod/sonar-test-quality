@@ -101,7 +101,7 @@ public final class Analyzer {
       return new Result(path, language, null, TestFile.EMPTY, List.of());
     }
     ParsedFile file = support.parse(path, language, source);
-    TestFile tests = support.extract(file);
+    TestFile tests = support.extract(file, paths(support.family()), project::read);
     List<Issue> issues = new ArrayList<>();
     Set<Integer> nosonar = nosonar(file);
     for (Map.Entry<String, TestRule> e : rules.getOrDefault(support.family(), Map.of()).entrySet()) {

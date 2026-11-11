@@ -83,7 +83,13 @@ language finds:
   await body(t); }); }`. Each call of it with a string literal name and a function literal body is a test (start: the
   wrapper's name, body: that function); its own call of the test function is not. Dart rules ask
   `DartSupport.testFunctions` which framework function a test runs (`test` or `testWidgets`) and which closure parameter
-  is the tester. Wrappers from other files are not followed.
+  is the tester. Wrappers declared in other project files count too when the test file imports them: Dart through an
+  `import` of the file (relative or `package:`) or of a file that `export`s it; JS/TS through `import { a, b as c }` or
+  a default import (the file's `export default function`) of a relative or workspace package path, or through one
+  `export { a } from` / `export * from` of the imported file. Namespace imports, `require` and tsconfig paths are not
+  followed. `LanguageSupport.extract(file, paths, read)` resolves them; each imported file is read and indexed once per
+  analysis (files without a test call or an export are not parsed). Dart rules get them from
+  `DartSupport.testFunctions(ParsedFile)`.
 
 `assertions` counts: Python `assert` statements, `self.assert*` / `self.fail`, `pytest.raises` / `pytest.warns` blocks,
 mock `assert_*` calls; JS `expect(...).<matcher>(...)` chains (a matcher call, `.not`, `.resolves` etc. included),
