@@ -242,7 +242,7 @@ window.registerExtension('testquality/testquality', function (options) {
   // ---- layout
 
   var style = h('style', {}, [
-    '.tq{container-type:inline-size;padding:0 20px 24px 20px;font-size:13px;color:inherit;' +
+    '.tq{width:100%;box-sizing:border-box;min-width:0;padding:0 20px 24px 20px;font-size:13px;color:inherit;' +
     '--blue:#2a78d6;--blue2:#86b6ef;--orange:#eb6834;--gray:#a3a29c;--track:rgba(128,128,128,.22);--good:#006300;--bad:#d03b3b;' +
     '--ok:#0ca30c;--err:#d03b3b;--card:rgba(128,128,128,.06);--rule:rgba(128,128,128,.28)}' +
     '.tq.tq-dark{--blue:#3987e5;--orange:#d95926;--gray:#6e6d68;--good:#0ca30c;--bad:#e66767;--err:#e66767}' +
@@ -250,7 +250,7 @@ window.registerExtension('testquality/testquality', function (options) {
     '.tq h3{font-size:12px;font-weight:600;margin:0 0 8px 0;opacity:.75}' +
     '.tq-tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;list-style:none;padding:0;margin:0 0 12px 0}' +
     '.tq-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;grid-auto-flow:dense}.tq-wide{grid-column:1/-1}' +
-    '@container (max-width:760px){.tq-grid{grid-template-columns:minmax(0,1fr)}.tq-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}' +
+    '.tq.tq-narrow .tq-grid{grid-template-columns:minmax(0,1fr)}.tq.tq-narrow .tq-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}' +
     '.tq-panel,.tq-tile{background:var(--card);border:1px solid var(--rule);border-radius:8px;padding:14px 16px;min-width:0}' +
     '.tq-tile .tq-name{font-size:12px;opacity:.8}.tq-tile .tq-num{display:block;font-size:34px;font-weight:600;line-height:1.15;margin:2px 0}' +
     '.tq-tile .tq-foot{display:flex;align-items:flex-end;gap:10px;min-height:28px}.tq-spark{flex:1;min-width:0;height:28px}' +
@@ -285,6 +285,9 @@ window.registerExtension('testquality/testquality', function (options) {
   var grid = h('div', {class: 'tq-grid'});
   root.appendChild(tiles);
   root.appendChild(grid);
+  // SonarQube places extension pages in a grid of two columns: span both, or the page gets only the first one
+  options.el.style.gridColumn = '1 / -1';
+  options.el.style.width = '100%';
   options.el.appendChild(root);
   if (dark(options.el)) {
     root.classList.add('tq-dark');
@@ -307,10 +310,15 @@ window.registerExtension('testquality/testquality', function (options) {
       fail: function (e) { body.replaceChildren(h('p', {role: 'alert', class: 'tq-muted'}, ['Cannot load: ' + e.message])); }
     };
   }
+  // no CSS container queries: SonarQube mounts the page in a grid column sized by its content, where inline-size
+  // containment would shrink the page to its padding; a class set from the measured width does the same job
+  var narrow = function () { root.classList.toggle('tq-narrow', root.clientWidth < 760); };
+  narrow();
   var lastWidth = root.clientWidth;
   var observer = window.ResizeObserver ? new ResizeObserver(function () {
     if (Math.abs(root.clientWidth - lastWidth) > 16) {
       lastWidth = root.clientWidth;
+      narrow();
       draws.forEach(function (d) { d(); });
     }
   }) : null;
